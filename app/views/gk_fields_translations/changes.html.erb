@@ -1,0 +1,7 @@
+<%# What has been changed, for everyone logged in: the latest first %>
+<% html_title l(:label_gk_fields_changes) %>
+<h2><%= l(:label_gk_fields_changes) %></h2>
+<p><%= l(:text_gk_fields_changes) %></p>
+<% if @changes.empty? %><p class="nodata"><%= l(:label_no_data) %></p><% else %>
+<%= render partial: 'gk_fields_translations/changes', locals: { changes: @changes, with_text: true } %>
+<% end %>

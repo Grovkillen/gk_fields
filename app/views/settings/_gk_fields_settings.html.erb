@@ -1,0 +1,118 @@
+<%# gk_fields: a line first when gk_access is missing (required for the layouts; without it the rest works), About the plugin with links to
+    its pages (those whose function is on), the languages what is set up is offered in, then the change log. The fields show what is stored (empty: the
+    default, which the placeholder names), so that saving the page never writes the default in. %>
+<% plugin = Redmine::Plugin.find(:gk_fields) %>
+<% changelog = ["CHANGELOG.#{current_language}.md", 'CHANGELOG.md'].map { |f| File.join(plugin.directory, f) }.find { |f| File.exist?(f) } %>
+<% stored = settings || {} %>
+<% default_language = Setting.default_language.to_s %>
+<% unless GkFields.access? %>
+  <div class="flash warning gk-fields-requires"><%= l(:text_gk_fields_access_missing) %></div>
+<% end %>
+<fieldset class="box"><legend><%= l(:label_gk_fields_about) %></legend>
+  <div><strong><%= plugin.name %></strong> <%= plugin.version %></div>
+  <div><%= l(:text_gk_fields_description) %></div>
+  <% links = [] %>
+  <% links << link_to(l(:label_gk_fields_translations), gk_fields_translations_path) if GkFields.feature?('fields.translations') %>
+  <% links << link_to(l(:label_gk_fields_layouts), gk_fields_layouts_path) if GkFields.layouts? %>
+  <% if links.present? %><div><%= safe_join(links, ', ') %></div><% end %>
+</fieldset>
+<fieldset class="box tabular"><legend><%= l(:label_gk_fields_languages) %></legend>
+<%# The languages as Redmine names them (the list on My account): one for the language names are written in, with
+    Redmine's default language as the empty choice, and any number to offer. A value stored before as a line of codes
+    is chosen in the list as well. %>
+<% langs = languages_options %>
+<% offered = (stored['content_languages'].is_a?(Array) ? stored['content_languages'] : stored['content_languages'].to_s.split(/[\s,]+/)).map(&:to_s).reject(&:empty?) %>
+<%# nothing stored: the languages in use are chosen in the list (Redmine's default language and English), so that the page shows what holds %>
+<% offered = [default_language, 'en'].uniq if offered.empty? %>
+<p><label for="settings_core_language"><%= l(:field_gk_fields_core_language) %></label>
+  <%= select_tag 'settings[core_language]', options_for_select([[l(:text_gk_fields_core_language_default, language: default_language), '']] + langs, stored['core_language'].to_s),
+                 id: 'settings_core_language' %>
+  <em class="info"><%= l(:text_gk_fields_core_language) %></em></p>
+<p><label for="settings_content_languages"><%= l(:field_gk_fields_content_languages) %></label>
+  <%= hidden_field_tag 'settings[content_languages][]', '', id: nil %>
+  <%= select_tag 'settings[content_languages][]', options_for_select(langs, offered), multiple: true, size: 8,
+                 id: 'settings_content_languages', title: l(:text_gk_fields_content_languages_default, languages: [default_language, 'en'].uniq.join(', ')) %>
+  <em class="info"><%= l(:text_gk_fields_content_languages) %> <%= l(:text_gk_fields_content_languages_default, languages: [default_language, 'en'].uniq.join(', ')) %></em></p>
+</fieldset>
+<%# The languages to offer as a picker: the chosen ones as badges with a cross, and a field that narrows the list as
+    one writes (Enter takes the first). The list above stays in the form, hidden, and is what is saved; without the
+    script it is the list itself. %>
+<% content_for :header_tags do %><%= stylesheet_link_tag('gk_fields_settings', plugin: :gk_fields) %><% end %>
+<%= javascript_tag do %>
+(function () {
+  var sel = document.getElementById('settings_content_languages');
+  if (!sel || sel.getAttribute('data-gk-picker')) return;
+  sel.setAttribute('data-gk-picker', '1');
+  var box = document.createElement('div'); box.className = 'gk-fields-lang-picker';
+  var chips = document.createElement('span'); chips.className = 'gk-fields-lang-chips';
+  var input = document.createElement('input'); input.type = 'text'; input.className = 'gk-fields-lang-search';
+  input.placeholder = <%= l(:text_gk_fields_language_add).to_json.html_safe %>; input.setAttribute('aria-label', input.placeholder);
+  var list = document.createElement('ul'); list.className = 'gk-fields-lang-list'; list.hidden = true;
+  box.appendChild(chips); box.appendChild(input); box.appendChild(list);
+  sel.parentNode.insertBefore(box, sel); sel.hidden = true;
+  // the arrow of core's own drop-down list, taken from a list on the page, so that the picker reads as one in every series
+  var like = document.querySelector('#content select:not([multiple])');
+  if (like) {
+    var cs = getComputedStyle(like);
+    if (cs.backgroundImage && cs.backgroundImage !== 'none') {
+      box.style.backgroundImage = cs.backgroundImage; box.style.backgroundRepeat = 'no-repeat';
+      box.style.backgroundPosition = cs.backgroundPosition; box.classList.add('gk-fields-lang-arrow');
+    }
+  }
+  box.addEventListener('mousedown', function (e) { if (e.target === box || e.target === chips) { e.preventDefault(); input.focus(); open(); } });
+  var remove = <%= l(:button_delete).to_json.html_safe %>;
+  function draw() {
+    chips.textContent = '';
+    Array.prototype.forEach.call(sel.options, function (o) {
+      if (!o.selected) return;
+      var c = document.createElement('span'); c.className = 'badge gk-fields-lang-chip'; c.textContent = o.text + ' ';
+      var x = document.createElement('button'); x.type = 'button'; x.textContent = '×'; x.title = remove + ': ' + o.text; x.setAttribute('aria-label', x.title);
+      x.addEventListener('click', function () { o.selected = false; draw(); input.focus(); });
+      c.appendChild(x); chips.appendChild(c);
+    });
+  }
+  function matches() {
+    var q = input.value.trim().toLowerCase();
+    return Array.prototype.filter.call(sel.options, function (o) { return !o.selected && (!q || o.text.toLowerCase().indexOf(q) >= 0 || o.value.toLowerCase() === q); });
+  }
+  function open() {
+    list.textContent = '';
+    matches().slice(0, 12).forEach(function (o) {
+      var li = document.createElement('li'); li.textContent = o.text; li.setAttribute('role', 'option');
+      li.addEventListener('mousedown', function (e) { e.preventDefault(); take(o); });
+      list.appendChild(li);
+    });
+    list.hidden = !list.children.length;
+    place();
+  }
+  // core's form rows (.tabular p) hide what goes outside them, so the list lies over the page, under the field
+  function place() {
+    if (list.hidden) return;
+    var r = box.getBoundingClientRect(), most = 16 * parseFloat(getComputedStyle(list).fontSize);
+    var below = Math.min(window.innerHeight - r.bottom - 8, most), above = Math.min(r.top - 8, most);
+    list.style.left = r.left + 'px'; list.style.minWidth = r.width + 'px';
+    if (below < 160 && above > below) { list.style.top = ''; list.style.bottom = (window.innerHeight - r.top + 2) + 'px'; list.style.maxHeight = above + 'px'; }
+    else { list.style.bottom = ''; list.style.top = (r.bottom + 2) + 'px'; list.style.maxHeight = Math.max(below, 80) + 'px'; }
+  }
+  window.addEventListener('scroll', place, true);
+  window.addEventListener('resize', place);
+  function take(o) { o.selected = true; input.value = ''; draw(); open(); input.focus(); }
+  input.addEventListener('input', open);
+  input.addEventListener('focus', open);
+  input.addEventListener('blur', function () { list.hidden = true; });
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); var m = matches()[0]; if (m) take(m); }
+    else if (e.key === 'Escape') { list.hidden = true; }
+    else if (e.key === 'Backspace' && !input.value) { var s = Array.prototype.filter.call(sel.options, function (o) { return o.selected; }).pop(); if (s) { s.selected = false; draw(); } }
+  });
+  draw();
+})();
+<% end %>
+<% if changelog %>
+<fieldset class="box"><legend><%= l(:label_gk_fields_changelog) %></legend>
+  <% unless current_language.to_s.start_with?('en') %><div class="gk-changelog-note"><em><%= l(:text_gk_fields_changelog_english) %></em></div><% end %>
+  <details class="gk-changelog"><summary><%= l(:button_show) %></summary>
+  <div class="wiki"><%= Redmine::WikiFormatting.to_html('common_mark', File.read(changelog, encoding: 'UTF-8').sub(/\A.*?(?=^## )/m, '')).html_safe %></div>
+  </details>
+</fieldset>
+<% end %>

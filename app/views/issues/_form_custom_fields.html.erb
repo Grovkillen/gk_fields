@@ -1,0 +1,43 @@
+<%# Core's partial for the issue form's custom fields (the same in every supported series), replaced: with a layout for the
+    issue (edit, else show; GkFields::Layouts) the custom fields the person may edit are in the layout's sections, the
+    ones it does not name in Other last; core draws the core fields in its own part of the form as before. Without a
+    layout, core's partial exactly as it is (below). core_watch: core gets field order per tracker; then this goes. %>
+<% sections = GkFields::Layouts.sections_for(@issue, User.current, scope: 'edit') %>
+<% if sections %>
+  <% sections.each do |s| %>
+    <fieldset class="gk-fields-section gk-fields-level-<%= s['level'] %> <%= GkFields::Layouts.level_classes(s['level']) %>" data-gk-fields-section="<%= s['key'] %>" data-gk-fields-level="<%= s['level'] %>">
+      <legend><span class="gk-fields-section-head"><% if GkFields::Layouts.above_lowest?(s['level']) %><span class="gk-fields-lock"><%= sprite_icon('lock') %></span><% end %><span class="gk-fields-section-name"><%= s['title'] %></span>
+        <% if GkFields::Layouts.above_lowest?(s['level']) %><span class="badge gk-fields-level"><%= GkFields::Layouts.level_label(s['level']) %></span><% end %></span></legend>
+      <% s['fields'].each do |f| %>
+        <% value = f['custom_value'] %>
+        <p data-gk-fields-field="<%= f['key'] %>"><%= custom_field_tag_with_label :issue, value, :required => @issue.required_attribute?(value.custom_field_id) %></p>
+        <%= wikitoolbar_for "issue_custom_field_values_#{value.custom_field_id}", preview_issue_path(:project_id => @issue.project, :issue_id => @issue.id) if value.custom_field.full_text_formatting? %>
+      <% end %>
+    </fieldset>
+  <% end %>
+<% else %>
+<% custom_field_values = @issue.editable_custom_field_values %>
+<% custom_field_values_full_width = custom_field_values.select { |value| value.custom_field.full_width_layout? } %>
+<% custom_field_values -= custom_field_values_full_width %>
+
+<% if custom_field_values.present? %>
+<div class="splitcontent">
+<div class="splitcontentleft">
+<% i = 0 %>
+<% split_on = (custom_field_values.size / 2.0).ceil - 1 %>
+<% custom_field_values.each do |value| %>
+  <p><%= custom_field_tag_with_label :issue, value, :required => @issue.required_attribute?(value.custom_field_id) %></p>
+<% if i == split_on -%>
+</div><div class="splitcontentright">
+<% end -%>
+<% i += 1 -%>
+<% end -%>
+</div>
+</div>
+<% end %>
+
+<% custom_field_values_full_width.each do |value| %>
+  <p><%= custom_field_tag_with_label :issue, value, :required => @issue.required_attribute?(value.custom_field_id) %></p>
+  <%= wikitoolbar_for "issue_custom_field_values_#{value.custom_field_id}", preview_issue_path(:project_id => @issue.project, :issue_id => @issue.id) if value.custom_field.full_text_formatting? %>
+<% end %>
+<% end %>

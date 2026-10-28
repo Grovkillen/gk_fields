@@ -1,0 +1,84 @@
+<%# Copy and paste: the texts of a language as YAML out, the translated YAML back in, with a review before anything is
+    saved %>
+<% html_title l(:label_gk_fields_exchange) %>
+<%= title [l(:label_gk_fields_translations), gk_fields_translations_path], l(:label_gk_fields_exchange) %>
+<p><%= l(:text_gk_fields_exchange) %></p>
+<% if @languages.empty? %>
+  <p class="nodata"><%= l(:text_gk_fields_no_languages) %></p>
+<% else %>
+<fieldset class="box tabular"><legend><%= l(:label_gk_fields_copy_out) %></legend>
+  <%= form_tag gk_fields_exchange_path, method: :get do %>
+    <p><label for="gk_fields_to"><%= l(:label_gk_fields_to_language) %></label>
+      <%= select_tag 'to', options_for_select(@languages, @to), id: 'gk_fields_to' %></p>
+    <p><label for="gk_fields_only"><%= l(:label_gk_fields_only_missing_short) %></label>
+      <%= check_box_tag 'only_missing', '1', @only_missing, id: 'gk_fields_only' %></p>
+    <p style="padding-inline-start:0"><%= submit_tag l(:button_gk_fields_make_yaml), name: 'make' %></p>
+  <% end %>
+  <% if @yaml %>
+    <p style="padding-inline-start:0"><strong><%= l(:text_gk_fields_yaml_count, count: @count) %></strong>
+      <a href="#" role="button" class="icon gk-fields-copy-yaml" title="<%= l(:text_gk_fields_yaml_copy) %>" data-gk-fields-copied="<%= l(:text_gk_fields_yaml_copied) %>"><%= sprite_icon('copy', l(:button_copy)) %></a>
+      <span class="gk-fields-copied" aria-live="polite"></span></p>
+    <%= text_area_tag 'yaml_out', @yaml, rows: 18, readonly: true, id: 'gk_fields_yaml', style: 'inline-size:100%;font-family:monospace;' %>
+    <%# Copy: with gk_gui_stuff its copy and notice, as every other copy; without it the clipboard and a line beside the
+        link, so the person sees that it is done %>
+    <%= javascript_tag do %>
+(function () {
+  var link = document.querySelector('a.gk-fields-copy-yaml'), area = document.getElementById('gk_fields_yaml');
+  var out = document.querySelector('span.gk-fields-copied');
+  if (!link || !area) return;
+  link.addEventListener('click', function (e) {
+    e.preventDefault();
+    var text = area.value, done = link.getAttribute('data-gk-fields-copied');
+    if (window.GkGui && window.GkGui.copy) { window.GkGui.copy(text, done); return; }
+    var said = function () { if (out) out.textContent = done; };
+    area.select();
+    if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(said, function () {}); return; }
+    try { if (document.execCommand('copy')) said(); } catch (err) { /* nothing copied, nothing said */ }
+  });
+})();
+    <% end %>
+  <% end %>
+</fieldset>
+
+<fieldset class="box" id="gk-fields-paste"><legend><%= l(:label_gk_fields_paste_in) %></legend>
+  <%= form_tag gk_fields_exchange_review_path(anchor: 'gk-fields-paste') do %>
+    <%= text_area_tag 'yaml', @pasted, rows: 12, id: 'gk_fields_paste', style: 'inline-size:100%;font-family:monospace;', placeholder: l(:text_gk_fields_paste_placeholder) %>
+    <p><%= submit_tag l(:button_gk_fields_review) %> <em class="info"><%= l(:text_gk_fields_review_hint) %></em></p>
+  <% end %>
+  <% if @errors&.any? %>
+    <div id="errorExplanation"><ul><% @errors.each do |e| %><li><%= e %></li><% end %></ul></div>
+  <% elsif @changes %>
+    <% by = @changes.group_by(&:state) %>
+    <p><strong><%= l(:text_gk_fields_review_sum, lang: @review_to, new: by['new'].to_a.size, changed: by['changed'].to_a.size, same: by['same'].to_a.size, empty: by['empty'].to_a.size) %></strong></p>
+    <%# The import form wraps the review tables, with Save N above and below them %>
+    <% to_save = by['new'].to_a.size + by['changed'].to_a.size %>
+    <% review_tables = capture do %>
+    <% %w[changed new stale unknown].each do |state| %>
+      <% next if by[state].blank? %>
+      <h4><%= l("label_gk_fields_state_#{state}") %> (<%= by[state].size %>)</h4>
+      <% if %w[stale unknown].include?(state) %><p><em class="info"><%= l("text_gk_fields_state_#{state}") %></em></p><% end %>
+      <table class="list"><thead><tr>
+        <th><%= l(:label_gk_fields_core, language: @core_language) %></th><th><%= l(:label_gk_fields_before) %></th><th><%= l(:label_gk_fields_after) %></th>
+      </tr></thead><tbody>
+        <% by[state].each do |c| %>
+          <tr><td class="text core" style="text-align:start"><%= c.entry ? truncate(c.entry.core.to_s, length: 100) : c.key %></td>
+            <td class="text before" style="text-align:start"><%= c.before.present? ? content_tag('del', c.before) : '' %></td>
+            <td class="text after" style="text-align:start"><%= c.after %></td></tr>
+        <% end %>
+      </tbody></table>
+    <% end %>
+    <% end %>
+    <% if to_save > 0 %>
+      <%= form_tag gk_fields_exchange_import_path do %>
+        <%= hidden_field_tag 'yaml', @pasted, id: nil %>
+        <p><%= submit_tag l(:button_gk_fields_import, count: to_save) %></p>
+        <%= review_tables %>
+        <p><%= submit_tag l(:button_gk_fields_import, count: to_save) %></p>
+      <% end %>
+    <% else %>
+      <%= review_tables %>
+      <p class="nodata"><%= l(:text_gk_fields_nothing_to_save) %></p>
+    <% end %>
+  <% end %>
+</fieldset>
+<% end %>

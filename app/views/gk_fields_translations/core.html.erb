@@ -1,0 +1,73 @@
+<%# Redmine's texts: core's own locale keys in one content language. Core's English, core's text in the language and
+    the instance's own text, the mark that core's text is right as it is, and the plugin's starting suggestion, which
+    is put in the field only when asked and saved only with Save. %>
+<% content_for :header_tags do %><%= javascript_include_tag 'gk_fields_core_texts', plugin: :gk_fields %><% end %>
+<% html_title l(:label_gk_fields_translations), l(:label_gk_fields_core_texts) %>
+<h2><%= l(:label_gk_fields_translations) %></h2>
+<p><%= l(:text_gk_fields_core_texts) %></p>
+<p><% if @may_translate %><%= link_to sprite_icon('copy', l(:label_gk_fields_exchange)), gk_fields_exchange_path, class: 'icon' %> &middot;<% end %>
+  <%= link_to sprite_icon('history', l(:label_gk_fields_changes)), gk_fields_changes_path, class: 'icon' %> &middot;
+  <%= link_to sprite_icon('comment', "#{l(:label_gk_fields_proposals)} (#{@pending})"), gk_fields_proposals_path, class: 'icon' %></p>
+<%= render partial: 'gk_fields_translations/tabs', locals: { groups: @groups, current: :core } %>
+<% if @core_languages.empty? %>
+  <p class="nodata"><%= l(:text_gk_fields_core_no_languages) %></p>
+<% else %>
+<%# The choices above the rows: gui_stuff's box (core's collapsible fieldset, minimized, open when nothing is shown),
+    titled with what it holds; without gui_stuff core's box %>
+<% filter_form = capture do %>
+<%= form_tag gk_fields_core_texts_path, method: :get, id: 'gk-fields-core-filter' do %>
+  <p>
+    <label for="gk_fields_core_lang"><%= l(:field_language) %></label>
+    <%= select_tag 'lang', options_for_select(@core_languages, @lang), id: 'gk_fields_core_lang' %>
+    <label for="gk_fields_core_which"><%= l(:label_gk_fields_core_show) %></label>
+    <%= select_tag 'filter', options_for_select([[l(:label_gk_fields_core_all), '']] +
+                                                 @counts.map { |k, n| [l(:"label_gk_fields_core_filter_#{k}", count: n), k] }, @filter.to_s), id: 'gk_fields_core_which' %>
+    <label for="gk_fields_core_q"><%= l(:label_search) %></label>
+    <%= search_field_tag 'q', @q, id: 'gk_fields_core_q', size: 30, placeholder: l(:text_gk_fields_core_search) %>
+    <%= submit_tag l(:button_apply), name: nil %>
+    <%= link_to sprite_icon('reload', l(:button_clear)), gk_fields_core_texts_path(lang: @lang), class: 'icon' %>
+  </p>
+<% end %>
+<% end %>
+<% shown = @filter ? l(:"label_gk_fields_core_filter_#{@filter}", count: @counts[@filter]) : l(:label_gk_fields_core_all) %>
+<% filter_title = "#{l(:label_filter_plural)}: #{[@lang, shown, @q.presence].compact.join(', ')}" %>
+<%= respond_to?(:gk_gui_stuff_choices_box) ? gk_gui_stuff_choices_box('fields.core_filter', filter_title, open: @rows.empty?) { filter_form } : content_tag(:fieldset, content_tag(:legend, filter_title) + filter_form, class: 'box') %>
+<p><em class="info"><%= l(:text_gk_fields_core_count, count: @row_count) %></em> &middot;
+  <%= link_to l(:label_gk_fields_core_yaml), gk_fields_core_texts_yaml_path(lang: @lang) %></p>
+<% if @rows.empty? %><p class="nodata"><%= l(:label_no_data) %></p><% else %>
+<% english = @lang == 'en' %>
+<%= form_tag gk_fields_core_texts_path(lang: @lang, filter: @filter, q: @q.presence, page: params[:page].presence), method: :post do %>
+  <p><%= submit_tag l(:button_save) %>
+    <% if @rows.any?(&:proposal) %><button type="button" class="gk-fields-core-take-all" title="<%= l(:text_gk_fields_core_take_all) %>"><%= l(:button_gk_fields_core_take_all) %></button><% end %></p>
+  <div class="autoscroll"><table class="list gk-fields-core-texts">
+    <thead><tr>
+      <th><%= l(:label_gk_fields_core_key) %></th><th><%= l(:label_gk_fields_core_english) %></th>
+      <% unless english %><th><%= l(:label_gk_fields_core_core, language: @lang) %></th><% end %>
+      <th><%= l(:label_gk_fields_core_own, language: @lang) %></th><th><%= l(:label_gk_fields_core_confirmed) %></th>
+      <th><%= l(:label_gk_fields_core_proposal) %></th><th><%= l(:label_gk_fields_core_changed) %></th>
+    </tr></thead>
+    <tbody>
+    <% @rows.each_with_index do |r, i| %>
+      <tr class="<%= 'gk-fields-core-missing' if r.missing? %>">
+        <td class="name" style="text-align:start"><code><%= r.key %></code><%= hidden_field_tag "rows[#{i}][key]", r.key, id: nil %></td>
+        <td class="text english" style="text-align:start"><%= r.english %></td>
+        <% unless english %>
+          <td class="text core" style="text-align:start"><%= r.core.nil? ? content_tag('em', l(:text_gk_fields_core_absent), class: 'info') : r.core %></td>
+        <% end %>
+        <td class="translation"><%= text_field_tag "rows[#{i}][value]", r.own, size: 40, id: "gk_fields_core_#{i}", placeholder: r.core || r.english,
+                                                   class: (r.missing? ? 'gk-fields-missing' : nil), 'aria-label': "#{r.key} (#{@lang})" %></td>
+        <td class="confirmed"><%= hidden_field_tag "rows[#{i}][confirmed]", '0', id: nil %>
+          <%= check_box_tag "rows[#{i}][confirmed]", '1', r.confirmed, id: "gk_fields_core_ok_#{i}", title: l(:text_gk_fields_core_confirmed), 'aria-label': "#{l(:label_gk_fields_core_confirmed)}: #{r.key}" %></td>
+        <td class="text proposal" style="text-align:start"><% if r.proposal %><%= r.proposal %>
+          <button type="button" class="gk-fields-core-take" data-gk-fields-target="gk_fields_core_<%= i %>" data-gk-fields-text="<%= r.proposal %>" title="<%= l(:text_gk_fields_core_take, key: r.key) %>" aria-label="<%= l(:text_gk_fields_core_take, key: r.key) %>"><%= l(:button_gk_fields_core_take) %></button><% end %></td>
+        <td class="author"><% if r.record %><%= format_time(r.record.updated_at) %><% if r.record.updated_by %>, <%= r.record.updated_by.name %><% end %><% end %>
+          <% if r.core_changed? %><br><em class="info"><%= l(:text_gk_fields_core_changed_since) %></em><% end %></td>
+      </tr>
+    <% end %>
+    </tbody>
+  </table></div>
+  <span class="pagination"><%= pagination_links_full @paginator, @row_count, per_page_links: false %></span>
+  <p><%= submit_tag l(:button_save) %></p>
+<% end %>
+<% end %>
+<% end %>

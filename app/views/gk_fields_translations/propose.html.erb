@@ -1,0 +1,30 @@
+<%# A proposal for a text as it is written, or a list value: nothing changes until a reviewer approves %>
+<% html_title l(:button_gk_fields_propose) %>
+<h2><%= l(:button_gk_fields_propose) %></h2>
+<p><%= l(:text_gk_fields_propose) %></p>
+<% if @errors&.any? %><div id="errorExplanation"><ul><% @errors.each do |e| %><li><%= e %></li><% end %></ul></div><% end %>
+<%= form_tag gk_fields_propose_path(key: @entry.key), method: :post, class: 'tabular' do %>
+  <div class="box tabular">
+    <p><label><%= l(:label_gk_fields_thing) %></label> <%= @group.label.call %>: <%= @entry.thing %>, <%= @entry.what %></p>
+    <p><label><%= l(:label_gk_fields_before) %></label> <%= @entry.core %></p>
+    <p><label for="gk_fields_after"><%= l(:label_gk_fields_after) %> <span class="required">*</span></label>
+      <%= text_field_tag 'after_text', params[:after_text] || @entry.core, size: 70, id: 'gk_fields_after', required: true %></p>
+    <%# The shared reason field of the place fields.proposal in gk_records. An optional reason is folded by records
+        into its own link (Add a reason), so the label stands only in front of a required one. %>
+    <% if respond_to?(:gk_records_reason_field) %>
+      <% unless GkRecords::Reasons.off?('fields.proposal') %>
+    <p><% if GkRecords::Reasons.required?('fields.proposal') %><label for="gk_fields_reason"><%= l(:label_gk_fields_reason) %> <span class="required">*</span></label><% end %>
+      <%= gk_records_reason_field('fields.proposal', value: params[:reason], area: true, rows: 3, size: 70, id: 'gk_fields_reason', chips: true) %></p>
+      <% end %>
+    <% else %>
+    <p><label for="gk_fields_reason"><%= l(:label_gk_fields_reason) %> <span class="required">*</span></label>
+      <%= text_area_tag 'reason', params[:reason], rows: 3, cols: 70, id: 'gk_fields_reason', required: true %></p>
+    <% end %>
+    <% if @consequences.any? %>
+      <p><label><%= l(:label_gk_fields_consequences) %></label>
+        <%= l(:text_gk_fields_consequence_values, count: @consequences['stored_values'].to_i) %>
+        <% if @consequences['rules'].to_i.positive? %><br><strong><%= l(:text_gk_fields_consequence_rules, count: @consequences['rules']) %></strong><% end %></p>
+    <% end %>
+  </div>
+  <p><%= submit_tag l(:button_gk_fields_send_proposal) %></p>
+<% end %>

@@ -1,0 +1,47 @@
+<%# Translations: one row per text, the text as it is written first and one input per language. One tab per sort
+    of thing: core's, and every plugin's that has texts set up. %>
+<% html_title l(:label_gk_fields_translations) %>
+<h2><%= l(:label_gk_fields_translations) %></h2>
+<p><%= l(:text_gk_fields_translations, language: @core_language) %></p>
+<p><%= link_to sprite_icon('copy', l(:label_gk_fields_exchange)), gk_fields_exchange_path, class: 'icon' %> &middot;
+  <%= link_to sprite_icon('history', l(:label_gk_fields_changes)), gk_fields_changes_path, class: 'icon' %> &middot;
+  <%= link_to sprite_icon('comment', "#{l(:label_gk_fields_proposals)} (#{@pending})"), gk_fields_proposals_path, class: 'icon' %></p>
+<%= render partial: 'gk_fields_translations/tabs', locals: { groups: @groups, current: @group.key } %>
+<% if @languages.empty? %>
+  <p class="nodata"><%= l(:text_gk_fields_no_languages) %></p>
+<% else %>
+<p>
+  <% if @only_missing %><%= link_to l(:label_gk_fields_show_all), gk_fields_translations_path(type: @group.key) %>
+  <% else %><%= link_to l(:label_gk_fields_only_missing, count: @missing_count), gk_fields_translations_path(type: @group.key, missing: 1) %><% end %>
+</p>
+<% if @rows.empty? %><p class="nodata"><%= l(:label_no_data) %></p><% else %>
+<%= form_tag gk_fields_translations_path(type: @group.key, missing: (@only_missing ? 1 : nil)), method: :post do %>
+  <%# Save above the table as well, in the same form %>
+  <p><%= submit_tag l(:button_save) %></p>
+  <%# a wide table scrolls in its own box, as core's lists (div.autoscroll), so that the page and Save stand still %>
+  <div class="autoscroll"><table class="list gk-fields-translation-list" data-gk-gui-rowmenu>
+    <thead><tr>
+      <th><%= l(:label_gk_fields_thing) %></th><th><%= l(:label_gk_fields_what) %></th><th><%= l(:label_gk_fields_core, language: @core_language) %></th>
+      <% @languages.each do |lang| %><th><%= lang %></th><% end %><th></th>
+    </tr></thead>
+    <tbody>
+    <% @rows.each_with_index do |e, i| %>
+      <tr>
+        <td class="name" style="text-align:start"><%= truncate(e.thing.to_s, length: 60) %></td>
+        <td class="what"><%= e.what %></td>
+        <td class="text core" style="text-align:start"><%= truncate(e.core.to_s, length: 120) %><%= hidden_field_tag "rows[#{i}][key]", e.key, id: nil %></td>
+        <% @languages.each do |lang| %>
+          <% have = (e.translations || {})[lang] %>
+          <td class="translation"><%= text_field_tag "rows[#{i}][t][#{lang}]", have, size: 30, id: "gk_fields_#{i}_#{lang}", class: (have.blank? && lang != @core_language ? 'gk-fields-missing' : nil), 'aria-label': "#{e.core} (#{lang})" %></td>
+        <% end %>
+        <td class="buttons"><%= link_to l(:label_history), gk_fields_find_path(text: e.core.to_s.strip), data: { gk_gui_row_action: true } %><% if GkFields::Review.may_propose?(User.current, e) %>
+          <%= link_to l(:button_gk_fields_propose), gk_fields_propose_path(key: e.key), data: { gk_gui_row_action: true } %><% end %></td>
+      </tr>
+    <% end %>
+    </tbody>
+  </table></div>
+  <p><%= submit_tag l(:button_save) %></p>
+<% end %>
+<%= gk_gui_stuff_row_menu if respond_to?(:gk_gui_stuff_row_menu) %>
+<% end %>
+<% end %>

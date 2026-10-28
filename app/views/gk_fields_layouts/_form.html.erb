@@ -1,0 +1,68 @@
+<%# A layout: where it applies, and its JSON (GkFields::Layouts). Preview draws the sections for an issue, unsaved. %>
+<%= error_messages_for @layout %>
+<div class="box tabular">
+  <p><%= f.select :tracker_id, Tracker.sorted.map { |t| [t.name, t.id] }, { required: true }, id: 'gk_fields_layout_tracker_id' %></p>
+  <p><%= f.select :status_id, [[l(:label_gk_fields_layout_all_statuses), '']] + IssueStatus.sorted.map { |s| [s.name, s.id] }, {}, id: 'gk_fields_layout_status_id' %></p>
+  <p><%= f.select :project_id, [[l(:label_gk_fields_layout_instance), '']] + Project.active.sorted.map { |p| [p.name, p.id] }, {}, id: 'gk_fields_layout_project_id' %></p>
+  <p><%= f.select :scope, GkFieldsLayout::SCOPES.map { |s| [l(:"label_gk_fields_layout_scope_#{s}"), s] }, {}, id: 'gk_fields_layout_scope' %></p>
+  <p><%= f.text_area :layout, rows: 24, class: 'wiki-edit', id: 'gk_fields_layout_layout', spellcheck: false %>
+     <em class="info"><%= l(:text_gk_fields_layout_json_help) %></em></p>
+  <p><label for="gk_fields_preview_issue_id"><%= l(:label_gk_fields_layout_preview_issue) %></label>
+     <%= text_field_tag 'preview_issue_id', params[:preview_issue_id], size: 30, id: 'gk_fields_preview_issue_id', list: 'gk-fields-preview-issues', autocomplete: 'off',
+                        placeholder: l(:text_gk_fields_layout_preview_find), data: { gk_fields_url: gk_fields_layouts_issues_path } %>
+     <datalist id="gk-fields-preview-issues"></datalist>
+     <em class="info"><%= l(:text_gk_fields_layout_preview_find_help) %></em></p>
+</div>
+<%# the issues a preview can use, as one writes: those of the tracker, status and project chosen above (as they are
+    now in the form, not as saved), from the layouts' own list (issues), without jQuery %>
+<%= javascript_tag do %>
+(function () {
+  var input = document.getElementById('gk_fields_preview_issue_id'), list = document.getElementById('gk-fields-preview-issues');
+  if (!input || !list || !window.fetch) return;
+  var place = { tracker_id: 'gk_fields_layout_tracker_id', status_id: 'gk_fields_layout_status_id', project_id: 'gk_fields_layout_project_id' };
+  var timer = null, last = null, seq = 0;
+  function query(term) {
+    var q = 'term=' + encodeURIComponent(term);
+    Object.keys(place).forEach(function (k) { var el = document.getElementById(place[k]); if (el && el.value) q += '&' + k + '=' + encodeURIComponent(el.value); });
+    return q;
+  }
+  function load(force) {
+    var term = input.value.trim(), q = query(term);
+    if (!force && q === last) return;
+    last = q; clearTimeout(timer);
+    timer = setTimeout(function () {
+      var mine = ++seq;
+      fetch(input.dataset.gkFieldsUrl + '?' + q, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .then(function (rows) {
+          if (mine !== seq) return;
+          list.textContent = '';
+          (rows || []).forEach(function (row) { var o = document.createElement('option'); o.value = row.id; o.label = row.label; o.textContent = row.label; list.appendChild(o); });
+        }).catch(function () {});
+    }, 200);
+  }
+  input.addEventListener('input', function () { load(false); });
+  input.addEventListener('focus', function () { load(false); });
+  Object.keys(place).forEach(function (k) {
+    var el = document.getElementById(place[k]);
+    if (el) el.addEventListener('change', function () { load(true); });
+  });
+})();
+<% end %>
+<p><%= submit_tag l(:button_save) %> <%= submit_tag l(:label_gk_fields_layout_preview), name: 'preview' %></p>
+<%# The shared reason field of the place fields.layout in gk_records, on its own line under the buttons; folded into
+    records' link (Add a reason) while it is optional %>
+<% if respond_to?(:gk_records_reason_field) && !GkRecords::Reasons.off?('fields.layout') %>
+  <p class="gk-fields-layout-reason"><%= gk_records_reason_field('fields.layout', value: params[:reason], size: 60, id: 'gk_fields_layout_reason') %></p>
+<% end %>
+<% if @preview_mismatch.present? %>
+  <% @preview_mismatch.each_value do |text| %><p class="warning"><%= text %></p><% end %>
+<% end %>
+<% if @preview_sections %>
+  <h3><%= l(:label_gk_fields_layout_preview) %>: <%= link_to_issue(@preview_issue) %></h3>
+  <div class="issue gk-fields-preview"><div class="attributes">
+    <%= render partial: 'gk_fields_layouts/sections', locals: { issue: @preview_issue, rows: GkFields::Layouts.core_rows(@preview_issue, self), sections: @preview_sections } %>
+  </div></div>
+<% elsif params[:preview].present? && @preview_issue.nil? %>
+  <p class="warning"><%= l(:text_gk_fields_layout_preview_no_issue) %></p>
+<% end %>

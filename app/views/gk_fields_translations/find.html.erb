@@ -1,0 +1,32 @@
+<%# One text, found by what it says on screen (the picker leads here): every thing that carries the text, its
+    languages, its changes, and the way to propose a new original. Everyone logged in may read it. %>
+<% html_title l(:label_gk_fields_translations), @text %>
+<h2><%= l(:label_gk_fields_translations) %> &#187; <%= @text %></h2>
+<% if @translations_on %>
+<p><%= link_to l(:label_gk_fields_changes), gk_fields_changes_path %><% if @may_translate %> &middot; <%= link_to l(:label_gk_fields_all_texts), gk_fields_translations_path %><% end %></p>
+<% end %>
+<% if @hits.empty? %><p class="nodata"><%= l(:text_gk_fields_find_none) %></p><% end %>
+<% @hits.each_with_index do |(group, e), i| %>
+  <fieldset class="box tabular"><legend><%= group.label.call %>: <%= truncate(e.thing.to_s, length: 60) %>, <%= e.what %></legend>
+    <p><label><%= l(:label_gk_fields_core, language: @core_language) %></label> <%= e.core %>
+      <% if @translations_on && GkFields::Review.may_propose?(User.current, e) %>
+        <%= link_to sprite_icon('edit', l(:button_gk_fields_propose)), gk_fields_propose_path(key: e.key), class: 'icon' %>
+      <% end %></p>
+    <% if @may_translate && @languages.any? %>
+      <%= form_tag gk_fields_translations_path(back_text: @text), method: :post do %>
+        <%= hidden_field_tag "rows[#{i}][key]", e.key, id: nil %>
+        <% @languages.each do |lang| %>
+          <p><label for="gk_fields_f_<%= i %>_<%= lang %>"><%= lang %></label>
+            <%= text_field_tag "rows[#{i}][t][#{lang}]", (e.translations || {})[lang], size: 60, id: "gk_fields_f_#{i}_#{lang}" %></p>
+        <% end %>
+        <p><%= submit_tag l(:button_save) %> <em class="info"><%= l(:text_gk_fields_translation_direct) %></em></p>
+      <% end %>
+    <% else %>
+      <% @languages.each do |lang| %><p><label><%= lang %></label> <%= (e.translations || {})[lang].presence || '-' %></p><% end %>
+    <% end %>
+    <% if (list = @changes[e.key]).present? %>
+      <p><strong><%= l(:label_gk_fields_changes) %></strong></p>
+      <%= render partial: 'gk_fields_translations/changes', locals: { changes: list, with_text: false } %>
+    <% end %>
+  </fieldset>
+<% end %>

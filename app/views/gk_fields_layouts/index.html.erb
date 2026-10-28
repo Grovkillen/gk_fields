@@ -1,0 +1,34 @@
+<%# The layouts of an issue's head: where each applies, and its sections %>
+<div class="contextual">
+  <%= link_to sprite_icon('add', l(:label_gk_fields_layout_new)), new_gk_fields_layout_path, class: 'icon' %>
+</div>
+<h2><%= l(:label_gk_fields_layouts) %></h2>
+<p class="info"><%= l(:text_gk_fields_layouts_intro) %></p>
+<% if @layouts.empty? %>
+  <p class="nodata"><%= l(:label_no_data) %></p>
+<% else %>
+<table class="list gk-fields-layout-list" data-gk-gui-rowmenu>
+  <thead><tr>
+    <th><%= l(:field_tracker) %></th><th><%= l(:field_status) %></th><th><%= l(:field_project) %></th>
+    <th><%= l(:label_gk_fields_layout_scope) %></th><th><%= l(:label_gk_fields_layout_sections) %></th><th></th>
+  </tr></thead>
+  <tbody>
+  <% @layouts.each do |lay| %>
+    <% sections = Array(lay.data&.dig('sections')) %>
+    <tr data-gk-fields-layout="<%= lay.id %>">
+      <td class="tracker"><%= lay.tracker&.name %></td>
+      <td class="status"><%= lay.status&.name || l(:label_gk_fields_layout_all_statuses) %></td>
+      <td class="project"><%= lay.project&.name || l(:label_gk_fields_layout_instance) %></td>
+      <td class="scope"><span class="gk-fields-layout-scope gk-fields-layout-scope-<%= lay.scope %>"><%= l(:"label_gk_fields_layout_scope_#{lay.scope}") %></span></td>
+      <td class="text sections"><%= sections.map { |s| GkFields::Layouts.title_of(s['title'], current_language) }.join(', ') %></td>
+      <td class="buttons">
+        <%= link_to sprite_icon('edit', l(:button_edit)), edit_gk_fields_layout_path(lay), class: 'icon', data: { gk_gui_row_action: 'keep' } %>
+        <%= link_to sprite_icon('del', l(:button_delete)), gk_fields_layout_path(lay), method: :delete, data: { confirm: l(:text_are_you_sure), gk_gui_row_action: true }, class: 'icon' %>
+      </td>
+    </tr>
+  <% end %>
+  </tbody>
+</table>
+<%= gk_gui_stuff_row_menu if respond_to?(:gk_gui_stuff_row_menu) %>
+<% end %>
+<% html_title(l(:label_gk_fields_layouts)) %>

@@ -1,0 +1,5 @@
+<h2><%= link_to l(:label_gk_fields_layouts), gk_fields_layouts_path %> &#187; <%= l(:label_gk_fields_layout_new) %></h2>
+<%= labelled_form_for @layout, url: gk_fields_layouts_path, html: { id: 'gk-fields-layout-form' } do |f| %>
+  <%= render partial: 'gk_fields_layouts/form', locals: { f: f } %>
+<% end %>
+<% html_title(l(:label_gk_fields_layouts)) %>

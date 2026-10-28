@@ -1,0 +1,30 @@
+<%# The tabs of Translations: one per sort of thing, core's and every plugin's, and last Redmine's own texts. Each
+    only for whoever may use it: the sorts of things with Translate texts that are set up, Redmine's texts with
+    Override Redmine's texts. current: the key of the tab shown, or :core. The arrows are core's own (common/_tabs):
+    core's script shows them when the tabs do not fit and scrolls the row with them. %>
+<div class="tabs"><ul>
+  <% if GkFields::Review.may?(User.current, :gk_fields_translate) %>
+    <%# a sort of thing with nothing in it to translate has no tab, unless it is the one asked for %>
+    <% groups.each_value.select { |g| g.key == current || g.entries.call.any? }.each do |g| %>
+      <li><%= link_to g.label.call, gk_fields_translations_path(type: g.key), class: (g.key == current ? 'selected' : nil) %></li>
+    <% end %>
+  <% end %>
+  <% if GkFields::Review.may?(User.current, :gk_fields_core_texts) %>
+    <li><%= link_to l(:label_gk_fields_core_texts), gk_fields_core_texts_path, class: (current == :core ? 'selected' : nil) %></li>
+  <% end %>
+</ul>
+  <div class="tabs-buttons" style="display:none;">
+    <button class="tab-left icon-only" type="button" onclick="moveTabLeft(this);"><%= sprite_icon('angle-left', rtl: true) %></button>
+    <button class="tab-right icon-only" type="button" onclick="moveTabRight(this);"><%= sprite_icon('angle-right', rtl: true) %></button>
+  </div>
+</div>
+<%# the tab shown is scrolled into view: each tab opens a page of its own, and core's row starts at the first tab %>
+<%= javascript_tag do %>
+window.addEventListener('load', function () {
+  var ul = document.querySelector('div.tabs ul'), a = ul && ul.querySelector('a.selected');
+  if (!a) return;
+  var li = a.parentNode;
+  if (li.offsetLeft + li.offsetWidth > ul.clientWidth) { ul.scrollLeft = li.offsetLeft - 20; }
+  if (typeof displayTabsButtons === 'function') displayTabsButtons();
+});
+<% end %>

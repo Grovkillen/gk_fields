@@ -1,0 +1,69 @@
+/* The layouts of an issue's head (GkFields::Layouts): the sections, their lock and level, and the line "You see".
+   Core's own row markup stays inside, so themes and core's styles hold. */
+/* a small line at the right of the first section's title, so that it never pushes the sections down */
+.gk-fields-you-see {
+  float: inline-end;
+  margin: 0.3em 0 0 1em;
+  color: var(--oc-gray-6, #868e96);
+  font-size: 0.85em;
+}
+/* the icon in the colour of core's own help icon (a link, a.icon-only.icon-help), with the help cursor */
+.gk-fields-you-see .icon-only {
+  color: var(--oc-blue-9, #1864ab);
+  cursor: help;
+}
+/* core strokes an icon in the link's colour only inside a link; this one is not a link */
+.gk-fields-you-see .icon-only svg { stroke: currentColor; }
+
+details.gk-fields-section,
+fieldset.gk-fields-section {
+  margin-block: 0.4em;
+}
+
+details.gk-fields-section > summary.gk-fields-section-title {
+  cursor: pointer;
+  font-weight: bold;
+  padding-block: 0.2em;
+}
+
+/* the title's lock, words and badge in one row, each in the middle of it (the marker of a summary stays: the row is
+   inline) */
+.gk-fields-section-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  vertical-align: middle;
+}
+
+/* the lock (core's icon) follows the title's font: its size in em */
+.gk-fields-section .gk-fields-lock { display: inline-flex; }
+.gk-fields-section .gk-fields-lock svg {
+  inline-size: 1em;
+  block-size: 1em;
+}
+
+/* the level's badge without core's lift for a badge beside an h2 (.badge inset-block-end: 4px) and margin */
+.gk-fields-section .gk-fields-level {
+  inset-block-end: 0;
+  margin: 0;
+  line-height: normal;
+  font-weight: normal;
+}
+
+/* the level's step above the lowest (gk_access's levels by rank): the first step yellow, every step above it red */
+.gk-fields-level-rank-1 .gk-fields-level {
+  background: var(--oc-yellow-1, #fff3bf);
+  color: var(--oc-yellow-9, #e67700);
+}
+
+.gk-fields-level-strict .gk-fields-level {
+  background: var(--oc-red-1, #ffe3e3);
+  color: var(--oc-red-9, #c92a2a);
+}
+
+/* a field with another appearance on a small screen: both are in the page, one is shown */
+.gk-fields-narrow { display: none; }
+@media (max-width: 899px) {
+  .gk-fields-wide { display: none; }
+  .gk-fields-narrow { display: block; }
+}

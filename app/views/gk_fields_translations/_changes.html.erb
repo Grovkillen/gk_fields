@@ -1,0 +1,15 @@
+<div class="autoscroll"><table class="list"><thead><tr>
+  <th><%= l(:field_created_on) %></th><% if with_text %><th><%= l(:label_gk_fields_thing) %></th><% end %><th><%= l(:field_language) %></th>
+  <th><%= l(:label_gk_fields_before) %></th><th><%= l(:label_gk_fields_after) %></th><th><%= l(:label_gk_fields_by) %></th>
+</tr></thead><tbody>
+<% changes.each do |c| %>
+  <tr>
+    <td class="created_on"><%= format_time(c.created_at) %></td>
+    <% if with_text %><td class="name" style="text-align:start"><%= c.thing %><% if c.what.present? %>, <%= c.what %><% end %></td><% end %>
+    <td class="language"><%= c.lang %></td>
+    <td class="text before" style="text-align:start"><%= c.before_text.present? ? content_tag('del', c.before_text) : '' %></td>
+    <td class="text after" style="text-align:start"><%= c.after_text %></td>
+    <td class="author"><%= c.user ? c.user.name : '-' %><% if %w[system import].include?(c.origin) %> <em class="info">(<%= l(:"label_gk_fields_origin_#{c.origin}") %>)</em><% end %><% if c.proposal_id %> <em class="info">(<%= l(:label_gk_fields_reviewed) %>)</em><% end %></td>
+  </tr>
+<% end %>
+</tbody></table></div>

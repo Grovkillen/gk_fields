@@ -1,0 +1,56 @@
+<%# The issue's head in its layout's sections (GkFields::Layouts.sections_for), with core's own row markup so that
+    themes and core's styles hold. locals: issue, rows (core's rows by key: [label, text]), sections. A section is a
+    details element, so that a folded one opens without script; above the lowest level it has the lock and its level in its
+    title, and the line "You see" names the levels the person sees fields in here. A field with an appearance of its
+    own is drawn by its field type (gk_appearance_tag), else as core draws it. %>
+<% levels = GkFields::Layouts.levels_seen(sections) %>
+<% level_name = ->(l) { GkFields::Layouts.level_label(l) } %>
+<%# You see: behind a small icon at the right of the first section's title, the words in its tooltip and for a screen reader %>
+<% you_see = l(:label_gk_fields_you_see, levels: levels.map(&level_name).join(', ')) %>
+<p class="gk-fields-you-see" data-gk-fields-levels="<%= levels.join(' ') %>"><span class="icon-only" title="<%= you_see %>" aria-label="<%= you_see %>" role="img"><%= sprite_icon('help', you_see) %></span></p>
+<% shown = lambda do |v, appearance, context|
+     fmt = v.custom_field.format
+     appearance != 'standard' && fmt.respond_to?(:gk_appearance_tag) ? fmt.gk_appearance_tag(self, v, appearance, context) : custom_field_value_tag(v)
+   end %>
+<% cell = lambda do |f|
+     if f['custom_value']
+       v = f['custom_value']
+       cf = v.custom_field
+       # another appearance on a small screen: both are drawn, the stylesheet shows one (a map hidden is never drawn)
+       text = if f['appearance_small'] && f['appearance_small'] != f['appearance']
+                content_tag(:div, shown.call(v, f['appearance'], 'show'), class: 'gk-fields-wide') +
+                  content_tag(:div, shown.call(v, f['appearance_small'], 'small'), class: 'gk-fields-narrow')
+              else
+                shown.call(v, f['appearance'], 'show')
+              end
+       content_tag(:div, content_tag(:div, custom_field_name_tag(cf) + ':', class: 'label') + content_tag(:div, text, class: 'value'),
+                   class: "#{cf.css_classes} attribute", data: { 'gk-fields-field' => f['key'], 'gk-fields-appearance' => f['appearance'] })
+     elsif (row = rows[f['key']])
+       label, text = row
+       content_tag(:div, content_tag(:div, label + ':', class: 'label') + content_tag(:div, text, class: 'value'),
+                   class: "#{GkFields::Layouts::CORE[f['key']]} attribute", data: { 'gk-fields-field' => f['key'] })
+     end
+   end %>
+<% sections.each do |s| %>
+  <% half = s['fields'].select { |f| f['width'] == 'half' } %>
+  <% full = s['fields'] - half %>
+  <details class="gk-fields-section gk-fields-level-<%= s['level'] %> <%= GkFields::Layouts.level_classes(s['level']) %>" data-gk-fields-section="<%= s['key'] %>" data-gk-fields-level="<%= s['level'] %>"<%= ' open' unless s['collapsed'] %>>
+    <summary class="gk-fields-section-title"><span class="gk-fields-section-head">
+      <% if GkFields::Layouts.above_lowest?(s['level']) %><span class="gk-fields-lock"><%= sprite_icon('lock') %></span><% end %>
+      <span class="gk-fields-section-name"><%= s['title'] %></span>
+      <% if GkFields::Layouts.above_lowest?(s['level']) %><span class="badge gk-fields-level"><%= level_name.call(s['level']) %></span><% end %>
+    </span></summary>
+    <% if half.any? %>
+      <% if s['columns'] == 1 %>
+        <div class="gk-fields-one-column"><%= safe_join(half.filter_map { |f| cell.call(f) }) %></div>
+      <% else %>
+        <% split = (half.size / 2.0).ceil %>
+        <div class="splitcontent">
+          <div class="splitcontentleft"><%= safe_join(half.first(split).filter_map { |f| cell.call(f) }) %></div>
+          <div class="splitcontentright"><%= safe_join(half.drop(split).filter_map { |f| cell.call(f) }) %></div>
+        </div>
+      <% end %>
+    <% end %>
+    <% full.each do |f| %><div class="gk-fields-full"><%= cell.call(f) %></div><% end %>
+  </details>
+<% end %>

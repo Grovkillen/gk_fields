@@ -1,0 +1,73 @@
+# config/registrations.yml: vad pluginet lägger i de gemensamma lagren
+# (miljömanifestet 8.1). Tomma listor betyder ingenting där; nycklarna
+# får inte saknas. En kontrollerad utskrift av det koden registrerar:
+# init.rb och extensions/gk_fields/ är källan, och varje rad pekar
+# på något som finns (T-REG). Det som bara är planerat står inte här
+# förrän det är byggt.
+permissions:            # init.rb; globala, utan project_module: gäller överallt för den som har behörigheten genom en roll i något projekt (Review.may?)
+  - {key: gk_fields_translate, scope: global, label: permission_gk_fields_translate}                       # översätta inställda texter, Kopiera och klistra in
+  - {key: gk_fields_propose_originals, scope: global, label: permission_gk_fields_propose_originals}       # föreslå ändrad originaltext
+  - {key: gk_fields_propose_list_values, scope: global, label: permission_gk_fields_propose_list_values}   # föreslå ändrat listvärde
+  - {key: gk_fields_review, scope: global, label: permission_gk_fields_review}                             # granska förslag på texter
+  - {key: gk_fields_core_texts, scope: global, label: permission_gk_fields_core_texts}                     # överstyra Redmines texter (fliken Redmines texter); HTML bara för administratörer
+  - {key: gk_fields_api_read, scope: global, label: permission_gk_fields_api_read}                         # bara OAuth-omfång: läsa över REST; en roll ger inget med den
+  - {key: gk_fields_api_manage, scope: global, label: permission_gk_fields_api_manage}                     # bara OAuth-omfång: ändra över REST; en roll ger inget med den
+menu:                   # rader i trepunktsmenyn (GkGuiStuff::Menu.register i init.rb); raderna i Redmines admin_menu och top_menu står i init.rb
+  - {key: fields_picker, section: show, context: [issue, issue_list, project, wiki_page, version, other], label: label_gk_fields_picker_menu, kind: action}   # Knappen Texter, när fields.picker är på
+drawer: []
+notices: []
+banners: []
+waves: []
+surfaces: []
+color_roles: []
+records:
+  targets:              # GkFields.register_records! (translations.rb), synliga för administratörer; en källas modell som inget plugin gjort till mål får ett enkelt mål där (fallback_targets!)
+    - {key: gk_fields_translation, model: GkFieldsTranslation}   # en texts översättningar
+    - {key: gk_fields_core_text, model: GkFieldsCoreText}        # en överstyrning av en av Redmines texter
+    - {key: gk_fields_layout, model: GkFieldsLayout}             # en layout för ärendets huvud
+    - {key: gk_fields_page, model: GkFieldsPage}                 # en av pluginets sidor (Kopiera och klistra in)
+  note_kinds: []
+  event_kinds:          # created och changed är records egna
+    - {key: gk_fields_layout_removed, target: gk_fields_layout, label: label_gk_fields_event_layout_removed}   # en layout togs bort; händelsen säger vad den var
+    - {key: gk_fields_paste_refused, target: gk_fields_page, label: label_gk_fields_event_paste_refused}      # en inklistrad text gick inte att läsa; språket och felet, aldrig texten (högst en per person och minut)
+  link_kinds: []
+strings:
+  terms: []
+text_levels: []
+templates:
+  kinds: []
+scenario_steps:         # GkFields::Scenarios (scenarios.rb); kontrollerna fields_layout, fields_appearance, fields_api, fields_layout_rules, fields_may, fields_flow, fields_core_text, fields_translated, fields_registered och fields_datetime
+  - {key: field_permissions, order: 60}   # rollernas behörigheter för texterna
+  - {key: translations, order: 400}       # namnen på scenariots andra språk
+  - {key: field_layouts, order: 410}      # layouterna för ärendets huvud
+jobs: []
+corners: []
+timeline: []
+queries: []
+folds: []
+copies: []
+view_states: []
+decorations: []
+content_transforms: []
+toolbar: []
+forms: []
+revisioned: []
+locked: []
+ribbons: []
+triggers: []
+trigger_actions: []
+gis_layers: []
+gis_columns: []
+disk_areas: []          # pluginet skriver inga filer; config/core_texts/ är startförslag som följer med paketet och bara läses
+features:               # records Features (init.rb), av från början
+  - {key: fields.translations, default: false, label: label_gk_feature_fields_translations, help: text_gk_feature_fields_translations}
+  - {key: fields.picker, default: false, label: label_gk_feature_fields_picker, help: text_gk_feature_fields_picker}
+  - {key: fields.layouts, default: false, label: label_gk_feature_fields_layouts, help: text_gk_feature_fields_layouts}   # kräver också gk_access (requires i IDENTITY.yml); utan access är layouterna stängda och resten fungerar
+reasons:                # records Reasons (init.rb)
+  - {key: fields.proposal, default: required, label: label_gk_reason_fields_proposal}            # ett förslag på en text eller ett listvärde
+  - {key: fields.layout, default: optional, admin: true, label: label_gk_reason_fields_layout}   # en layout som sparas
+personal:               # gui_stuff Personal (init.rb): Förslag på texter, när fields.translations är på
+  - {key: fields.proposals, order: 40, label: label_gk_fields_proposals}
+appearances: {}         # fields egna fälttyper har bara Standard; andra plugins anmäler sina här, och Layouts.load_registrations! läser dem
+access_items:           # access (krävs för layouterna): uppgifter som bär en nivå {key, label, plugin}; utan access registreras inget
+  - { key: fields.layout_section, label: label_gk_fields_layout_section, plugin: gk_fields }

@@ -1,0 +1,53 @@
+<%# The proposals: a reviewer sees all and decides; everyone else sees her own. Pending first, a filter by state with
+    the count of each, the state as a badge in its colour and a line in the same colour at the start of the row %>
+<% html_title l(:label_gk_fields_proposals) %>
+<% content_for :header_tags do %><%= stylesheet_link_tag('gk_fields_translations', plugin: :gk_fields) %><% end %>
+<h2><%= l(:label_gk_fields_proposals) %></h2>
+<p><%= l(@reviewer ? :text_gk_fields_proposals_reviewer : :text_gk_fields_proposals_own) %></p>
+<% counts = @counts || {} %>
+<p class="gk-fields-proposal-filter">
+  <% fresh = @fresh || [] %>
+  <% if fresh.any? || @state == 'since' %>
+    <%= link_to l(:label_gk_fields_since_last) + " (#{fresh.size})", gk_fields_proposals_path(state: 'since'), class: (@state == 'since' ? 'selected' : nil) %> &middot;
+  <% end %>
+  <%= link_to l(:label_all).capitalize + " (#{counts.values.sum})", gk_fields_proposals_path(all: 1), class: (@state.nil? ? 'selected' : nil) %>
+  <% %w[pending approved rejected].each do |s| %>
+    &middot; <%= link_to l("label_gk_fields_state_#{s}") + " (#{counts[s].to_i})", gk_fields_proposals_path(state: s), class: (@state == s ? 'selected' : nil) %>
+  <% end %>
+</p>
+<% if @proposals.empty? %><p class="nodata"><%= l(:label_no_data) %></p><% else %>
+<div class="autoscroll"><table class="list gk-fields-proposals"><thead><tr>
+  <th><%= l(:field_status) %></th><th><%= l(:field_created_on) %></th><th><%= l(:label_gk_fields_thing) %></th>
+  <th><%= l(:label_gk_fields_before) %></th><th><%= l(:label_gk_fields_after) %></th>
+  <th><%= l(:label_gk_fields_reason) %></th><th><%= l(:label_gk_fields_by) %></th><th></th>
+</tr></thead><tbody>
+<% @proposals.each do |p| %>
+  <tr class="gk-fields-proposal-<%= p.state %><%= ' gk-fields-proposal-fresh' if (@fresh || []).include?(p.id) %>">
+    <td class="status"><span class="badge gk-fields-proposal-state gk-fields-proposal-state-<%= p.state %>"><%= l("label_gk_fields_state_#{p.state}") %></span>
+      <% if (@fresh || []).include?(p.id) %><span class="badge gk-fields-proposal-new"><%= l(:label_gk_fields_new_since_last) %></span><% end %></td>
+    <td class="created_on"><%= format_time(p.created_at) %></td>
+    <td class="name"><%= p.thing %>, <%= p.what %></td>
+    <%# What was not used is struck: the text before when the proposal is approved, the proposed text when it is rejected %>
+    <td class="text before"><%= p.state == 'approved' ? content_tag('del', p.before_text) : p.before_text %></td>
+    <td class="text after"><%= p.state == 'rejected' ? content_tag('del', p.after_text) : content_tag('strong', p.after_text) %></td>
+    <td class="text reason"><%= p.reason %></td>
+    <td class="author"><%= p.proposed_by&.name || '-' %></td>
+    <td class="decision">
+      <% if p.state == 'pending' %>
+        <% c = @consequences[p.id] || {} %>
+        <% if c.any? %><div class="gk-fields-consequence"><%= l(:text_gk_fields_consequence_values, count: c['stored_values'].to_i) %><% if c['rules'].to_i.positive? %> <strong><%= l(:text_gk_fields_consequence_rules, count: c['rules']) %></strong><% end %></div><% end %>
+        <% if @reviewer && (p.proposed_by_id != User.current.id || User.current.admin?) %>
+          <%= form_tag gk_fields_decide_path(p), method: :post do %>
+            <%= text_field_tag 'note', '', size: 30, placeholder: l(:label_gk_fields_review_note), id: nil %>
+            <%= button_tag l(:button_gk_fields_approve), type: 'submit', name: 'verdict', value: 'approve', title: l(:text_gk_fields_approve) %>
+            <%= button_tag l(:button_gk_fields_reject), type: 'submit', name: 'verdict', value: 'reject', title: l(:text_gk_fields_reject) %>
+          <% end %>
+        <% end %>
+      <% else %>
+        <span class="gk-fields-decided"><%= p.reviewed_by&.name %>, <%= format_time(p.reviewed_at) %></span><% if p.review_note.present? %><br><em><%= p.review_note %></em><% end %>
+      <% end %>
+    </td>
+  </tr>
+<% end %>
+</tbody></table></div>
+<% end %>
