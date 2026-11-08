@@ -11,6 +11,8 @@
 # layouts.
 
 require_relative 'extensions/gk_fields/translations'
+# The picker's anchors: the readers mark each name with its entry on a page that asks for it
+require_relative 'extensions/gk_fields/picker'
 # Redmine's own texts corrected in this instance, shown through an I18n backend in front of core's
 require_relative 'extensions/gk_fields/core_texts'
 require_relative 'extensions/gk_fields/exchange'
@@ -31,7 +33,7 @@ Redmine::Plugin.register :gk_fields do
   author      'Jimmy Westberg'
   description 'The custom field format Date and time, names per language for what Redmine keeps as one text, ' \
               "Redmine's own texts corrected per language, and the layouts of an issue's head"
-  version     '1.00.000'
+  version     '1.01.000'
   requires_redmine version_or_higher: '6.0.0'
 
   settings default: { 'content_languages' => '', 'core_language' => '' }, partial: 'settings/gk_fields_settings'

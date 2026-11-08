@@ -14,7 +14,11 @@ module GkFields
   #   possible_custom_value_options and formatted_value give a list field's choices and values; only the label
   #   changes, the stored value stays the core string.
   # * ApplicationController#process_action (Translations::ControllerPatch): every action of every controller runs
-  #   through it, also of controllers loaded before this plugin; translation is switched on for the request there.
+  #   through it, also of controllers loaded before this plugin; translation is switched on for the request there,
+  #   and the picker's marks (Picker) when the page asks for them.
+  # * Redmine::Views::Builders::Json#output (Translations::ApiBuilderPatch): core's API views write a structure into
+  #   the builder, which output turns into JSON; with lang= each name a reader gave as an ApiName is written as name
+  #   (the core string) and name_lang (the translation) first.
   # * Mailer#process (Translations::MailerPatch): a mail is written inside it in the recipient's language.
   # * I18n.backend (CoreTexts.install!): the chain with the corrections in front of whatever backend Redmine has set
   #   up; put in again at each request and mail (CoreTexts.refresh!) if anything replaced it.
@@ -33,6 +37,7 @@ module GkFields
       prepend!(::Redmine::FieldFormat::ListFormat, Translations::ListFormatPatch)
       prepend!(::CustomFieldsHelper, Translations::ApiValuesPatch)
       prepend!(::ApplicationController, Translations::ControllerPatch)
+      prepend!(::Redmine::Views::Builders::Json, Translations::ApiBuilderPatch)
       prepend!(::Mailer, Translations::MailerPatch)
       CoreTexts.install!
       prepend!(::Query, DateTime::QueryPatch)

@@ -29,7 +29,7 @@
   link.addEventListener('click', function (e) {
     e.preventDefault();
     var text = area.value, done = link.getAttribute('data-gk-fields-copied');
-    if (window.GkGui && window.GkGui.copy) { window.GkGui.copy(text, done); return; }
+    if (window.GkGui && window.GkGui.copy) { window.GkGui.copy(text, done, link); return; }
     var said = function () { if (out) out.textContent = done; };
     area.select();
     if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(said, function () {}); return; }

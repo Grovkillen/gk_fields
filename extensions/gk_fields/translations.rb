@@ -42,6 +42,9 @@ module GkFields
     # where the core strings are edited or used as keys: never translated there
     OFF_CONTROLLERS = %w[trackers issue_statuses enumerations custom_fields roles issue_categories gk_fields_translations
                          gk_scenarios imports].freeze
+    # core's lists of these things (their index pages): the names are only shown there, never in a field that is
+    # sent back, so the picker marks them although they are not translated (Picker; never on their forms)
+    LIST_CONTROLLERS = %w[trackers issue_statuses enumerations custom_fields roles].freeze
 
     module_function
 
@@ -166,15 +169,21 @@ module GkFields
     # language included, since a translation in it is shown to its readers as in any other language
     def editable_languages = content_languages
 
-    def with(on, lang: nil)
-      prev = [Thread.current[:gk_fields_on], Thread.current[:gk_fields_lang]]
+    # api: a REST request with lang= (the readers give an ApiName); pick: the picker's marks asked for (Picker.wanted?).
+    # Both are off unless given, so a mail written inside a request has neither.
+    def with(on, lang: nil, api: false, pick: false)
+      prev = [Thread.current[:gk_fields_on], Thread.current[:gk_fields_lang], Thread.current[:gk_fields_api], Picker.state]
       Thread.current[:gk_fields_on] = on
       Thread.current[:gk_fields_lang] = lang.to_s.presence
+      Thread.current[:gk_fields_api] = api && on ? true : false
+      Picker.state = Picker.fresh(pick)
       refresh! if on
       yield
     ensure
-      Thread.current[:gk_fields_on], Thread.current[:gk_fields_lang] = prev
+      Thread.current[:gk_fields_on], Thread.current[:gk_fields_lang], Thread.current[:gk_fields_api], Picker.state = prev
     end
+
+    def api? = Thread.current[:gk_fields_api] == true
 
     def without(&block) = with(false, &block)
 
@@ -206,14 +215,15 @@ module GkFields
     def value_label(custom_field, value)
       return value unless active? && value.is_a?(String) && custom_field&.id
 
-      lookup('CustomField', custom_field.id, VALUE, value) || value
+      Picker.mark(['CustomField', custom_field.id, VALUE, value].join(':'), lookup('CustomField', custom_field.id, VALUE, value) || value)
     end
 
     # For a request (an ApplicationController, ControllerPatch): on for pages shown to a person; in the API only with
     # lang=
     def for_request(controller, &block)
       lang = nil
-      if controller.send(:api_request?)
+      api = controller.send(:api_request?)
+      if api
         # the API gives core strings (they are the keys), and names in a language only when asked: lang=en.
         # That holds for the lists of trackers and statuses too; only their forms are kept on the core string.
         lang = controller.params[:lang].to_s.presence
@@ -221,7 +231,14 @@ module GkFields
       else
         on = !off_controller?(controller.controller_name)
       end
-      with(on, lang: lang, &block)
+      pick = !api && (on || list_page?(controller)) && Picker.wanted?(controller)
+      with(on, lang: lang, api: api, pick: pick, &block)
+    end
+
+    # Core's list of trackers, statuses, enumerations, custom fields or roles: not translated, but the picker marks
+    # the names shown there (the core strings), since nothing on the list is sent back
+    def list_page?(controller)
+      LIST_CONTROLLERS.include?(controller.controller_name) && controller.action_name == 'index'
     end
 
     # A reader per attribute: the translation when switched on and there is one, otherwise what core gives
@@ -230,12 +247,23 @@ module GkFields
         attrs.each do |a|
           define_method(a) do
             core = defined?(super) ? super() : read_attribute(a)
-            return core unless GkFields::Translations.active? && !new_record?
+            return core if new_record?
+            # not translated here; on core's list of these things the picker still marks the core string
+            return GkFields::Picker.mark([type, id, a].join(':'), core) unless GkFields::Translations.active?
 
-            GkFields::Translations.lookup(type, id, a) || core
+            GkFields::Translations.shown(type, id, a, GkFields::Translations.lookup(type, id, a) || core, core)
           end
         end
       end
+    end
+
+    # What a reader gives when translation is on: in the REST API with lang= an ApiName for core's models (the
+    # translation, carrying the core string), on a page the picker marks the text with its entry (Picker.mark), else
+    # the text as it is
+    def shown(type, id, attr, text, core)
+      return ApiName.new(text, core) if api? && TYPES.key?(type) && core.is_a?(String)
+
+      Picker.mark([type, id, attr].join(':'), text)
     end
 
     # The REST API's custom field values: value is always the stored value, the same in every language, so that a
@@ -306,70 +334,49 @@ module GkFields
       def process_action(*args)
         GkFields::CoreTexts.refresh! # Redmine's texts as this instance has corrected them, also when another process saved
         GkFields::Translations.for_request(self) { super }
-        GkFields::Translations.api_names!(self)
       end
     end
 
     # The REST API with lang=: a thing's name is the name as it is written, the same in every language, and name_lang is
     # its name in the language asked for, beside its id, as a list field's value and value_lang are (ApiValuesPatch). A
-    # client that knows no languages keeps working on name and id. By key in the JSON: one thing, or a list of them.
-    API_ONE = { 'tracker' => 'Tracker', 'status' => 'IssueStatus', 'default_status' => 'IssueStatus', 'priority' => 'Enumeration',
-                'category' => 'IssueCategory', 'activity' => 'Enumeration' }.freeze
-    API_LIST = { 'trackers' => 'Tracker', 'issue_statuses' => 'IssueStatus', 'roles' => 'Role', 'issue_priorities' => 'Enumeration',
-                 'time_entry_activities' => 'Enumeration', 'document_categories' => 'Enumeration', 'issue_categories' => 'IssueCategory',
-                 'custom_fields' => 'CustomField' }.freeze
+    # client that knows no languages keeps working on name and id. The thing is known by the value itself, not by where
+    # it stands in the response: in such a request the readers of core's models (Translations.reader) give an ApiName,
+    # the translation carrying the core string, and before the API's JSON builder writes its structure out
+    # (ApiBuilderPatch) each ApiName in it becomes the core string under its own key and the translation under
+    # <key>_lang (name and name_lang, description and description_lang), wherever core's API views wrote it.
+    class ApiName < ::String
+      attr_reader :core
 
-    def api_names!(controller)
-      return unless controller.send(:api_request?) && controller.params[:lang].present?
-
-      res = controller.response
-      return unless res.media_type.to_s.include?('json') && res.body.present?
-
-      data = JSON.parse(res.body)
-      found = Hash.new { |h, k| h[k] = [] }
-      api_walk(data) { |type, thing| found[type] << thing }
-      return if found.empty?
-
-      found.each do |type, things|
-        model = type.constantize
-        # the description too where it is translated (trackers, statuses, custom fields): description and description_lang
-        desc = TYPES.fetch(model.base_class.name, []).include?('description')
-        cols = desc ? %i[id name description] : %i[id name]
-        core = model.where(id: things.map { |t| t['id'] }).pluck(*cols).to_h { |row| [row[0], row[1..]] }
-        things.each do |t|
-          name, description = core[t['id'].to_i]
-          next unless name
-
-          t['name_lang'] = t['name']
-          t['name'] = name
-          next unless desc && t.key?('description')
-
-          t['description_lang'] = t['description']
-          t['description'] = description
-        end
+      def initialize(text, core)
+        super(text.to_s)
+        @core = core.to_s
       end
-      res.body = data.to_json
-    rescue StandardError => e
-      Rails.logger.warn("[gk_fields] API names not given beside their labels: #{e.class} #{e.message}")
     end
 
-    def api_walk(node, key = nil, &block)
+    # Core patch (Patches.apply!): Redmine::Views::Builders::Json, the builder core's API views (.api.rsb) write into;
+    # its structure is turned into JSON in output. The XML builder writes as it goes and has no structure: there the
+    # name stays the translation, as before.
+    module ApiBuilderPatch
+      def output
+        GkFields::Translations.api_names!(@struct.first) if GkFields::Translations.api?
+        super
+      end
+    end
+
+    def api_names!(node)
       case node
       when Hash
-        type = API_ONE[key]
-        block.call(type, node) if type && node['id'] && node.key?('name')
-        node.each { |k, v| api_walk(v, k, &block) }
-      when Array
-        type = API_LIST[key]
-        node.each do |v|
-          if type && v.is_a?(Hash) && v['id'] && v.key?('name')
-            block.call(type, v)
-            v.each { |k, w| api_walk(w, k, &block) }
-          else
-            api_walk(v, nil, &block)
-          end
+        found = node.select { |_k, v| v.is_a?(ApiName) }
+        found.each do |k, v|
+          node[k] = v.core
+          node[k.is_a?(Symbol) ? :"#{k}_lang" : "#{k}_lang"] = ::String.new(v)
         end
+        node.each_value { |v| api_names!(v) if v.is_a?(Hash) || v.is_a?(Array) }
+      when Array
+        node.each { |v| api_names!(v) if v.is_a?(Hash) || v.is_a?(Array) }
       end
+    rescue StandardError => e
+      Rails.logger.warn("[gk_fields] API names not given beside their labels: #{e.class} #{e.message}")
     end
 
     # Core patch (Patches.apply!): a mail is written in the recipient's language, names included

@@ -18,11 +18,10 @@ class GkFieldsTranslationsController < ApplicationController
   before_action :require_login
   before_action :require_api_scope
   # Two declared functions, off by default. Translations with Copy and paste, Changed texts, Proposed texts and
-  # Redmine's texts is 'fields.translations'; the picker's list is 'fields.picker'; the page for one text (find) is
-  # there when either is on
+  # Redmine's texts is 'fields.translations'; the picker is 'fields.picker'; the page for one text (find) is there when
+  # either is on
   before_action -> { render_404 unless GkFields.feature?('fields.translations') },
                 only: %i[index update exchange review import changes propose proposals decide core core_update core_yaml]
-  before_action -> { render_404 unless GkFields.feature?('fields.picker') }, only: [:texts]
   before_action -> { render_404 unless GkFields.feature?('fields.picker') || GkFields.feature?('fields.translations') }, only: [:find]
   before_action :require_translate_or_core, only: [:index]
   before_action :require_translate, only: [:update, :exchange, :review, :import]
@@ -65,7 +64,9 @@ class GkFieldsTranslationsController < ApplicationController
       changed += 1 if t.save_entry(entry, (row['t'] || {}).slice(*t.editable_languages), User.current, nil)
     end
     flash[:notice] = l(:notice_gk_fields_saved, count: changed)
-    if params[:back_text].present?
+    if params[:back_key].present?
+      redirect_to gk_fields_find_path(key: params[:back_key])
+    elsif params[:back_text].present?
       redirect_to gk_fields_find_path(text: params[:back_text])
     else
       redirect_to gk_fields_translations_path(type: params[:type], missing: params[:missing].presence)
@@ -151,23 +152,24 @@ class GkFieldsTranslationsController < ApplicationController
     send_data GkFields::CoreTexts.export(lang), filename: "redmine_#{lang}_gk_fields.yml", type: 'text/yaml; charset=utf-8', disposition: 'inline'
   end
 
-  # The picker's list: every text on screen that can be administered, as it is shown in the reader's language
-  def texts
-    return render(json: { texts: [] }) unless GkFields::Review.any?(User.current)
-
-    lang = I18n.locale.to_s
-    list = GkFields::Exchange.index.values.map { |_g, e| (e.translations || {})[lang].presence || e.core.to_s }
-    render json: { texts: list.map(&:strip).select { |s| s.length.between?(2, 200) }.uniq }
-  end
-
-  # One text found by what it says on screen: its languages, its changes, and the way to propose a new original
+  # One text: by its entry's key (key=, the picker's icon, which knows the entry it stands at), or by what it says on
+  # screen (text=, every thing that carries the text): its languages, its changes, and the way to propose a new
+  # original
   def find
-    @text = params[:text].to_s.strip
     lang = I18n.locale.to_s
+    @key = params[:key].to_s
     @languages = GkFields::Translations.languages.empty? ? [] : GkFields::Translations.editable_languages
     @core_language = GkFields::Translations.core_language
-    @hits = @text.empty? ? [] : GkFields::Exchange.index.values.select do |_g, e|
-      e.core.to_s.strip == @text || (e.translations || {})[lang].to_s.strip == @text
+    index = GkFields::Exchange.index
+    if @key.present?
+      hit = index[@key]
+      @hits = hit ? [hit] : []
+      @text = hit ? hit.last.core.to_s.strip : ''
+    else
+      @text = params[:text].to_s.strip
+      @hits = @text.empty? ? [] : index.values.select do |_g, e|
+        e.core.to_s.strip == @text || (e.translations || {})[lang].to_s.strip == @text
+      end
     end
     shown = readable_keys(@hits.map { |_g, e| e.key })
     @hits = @hits.select { |_g, e| shown.include?(e.key) }

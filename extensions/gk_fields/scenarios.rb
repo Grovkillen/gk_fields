@@ -241,7 +241,8 @@ module GkFields
           failed << 'hidden_drawn' if keys.include?("cf:#{hidden.id}")
           failed << "section_level (#{seen&.first&.dig('level')})" unless seen&.first&.dig('level') == 'internal'
           failed << 'other_last' unless seen&.last&.dig('key') == Layouts::OTHER && seen.last['collapsed']
-          failed << 'project_first' unless Layouts.for_issue(issue) == own.data
+          got_layout = Layouts.for_issue(issue)
+          failed << "project_first (layouts #{GkFields.layouts?}, access #{GkFields.access?}, table #{::GkFieldsLayout.table_exists?}, got #{got_layout.nil? ? 'nothing' : 'another'}, tracker #{issue.tracker_id}/#{own.tracker_id}, project #{issue.project_id}/#{own.project_id}, status #{own.status_id.inspect}, scope #{own.scope})" unless got_layout == own.data
           raise ::ActiveRecord::Rollback
         end
         { 'ok' => failed.empty?, 'want' => 'layouts hold', 'got' => failed.empty? ? 'layouts hold' : "not: #{failed.join(', ')}" }

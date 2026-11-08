@@ -1,4 +1,4 @@
-<%# One text, found by what it says on screen (the picker leads here): every thing that carries the text, its
+<%# One text, by its entry's key (the picker's icon leads here) or by what it says on screen (every thing that carries the text): its
     languages, its changes, and the way to propose a new original. Everyone logged in may read it. %>
 <% html_title l(:label_gk_fields_translations), @text %>
 <h2><%= l(:label_gk_fields_translations) %> &#187; <%= @text %></h2>
@@ -13,7 +13,7 @@
         <%= link_to sprite_icon('edit', l(:button_gk_fields_propose)), gk_fields_propose_path(key: e.key), class: 'icon' %>
       <% end %></p>
     <% if @may_translate && @languages.any? %>
-      <%= form_tag gk_fields_translations_path(back_text: @text), method: :post do %>
+      <%= form_tag gk_fields_translations_path(@key.present? ? { back_key: @key } : { back_text: @text }), method: :post do %>
         <%= hidden_field_tag "rows[#{i}][key]", e.key, id: nil %>
         <% @languages.each do |lang| %>
           <p><label for="gk_fields_f_<%= i %>_<%= lang %>"><%= lang %></label>

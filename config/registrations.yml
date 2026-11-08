@@ -1,5 +1,5 @@
-# config/registrations.yml: vad pluginet lägger i de gemensamma lagren
-# (miljömanifestet 8.1). Tomma listor betyder ingenting där; nycklarna
+# config/registrations.yml: vad pluginet lägger i de gemensamma lagren.
+# Tomma listor betyder ingenting där; nycklarna
 # får inte saknas. En kontrollerad utskrift av det koden registrerar:
 # init.rb och extensions/gk_fields/ är källan, och varje rad pekar
 # på något som finns (T-REG). Det som bara är planerat står inte här

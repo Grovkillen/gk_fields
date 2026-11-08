@@ -12,7 +12,6 @@ put  'gk_fields/translations/core', to: 'gk_fields_translations#core_update'
 get  'gk_fields/translations/core/yaml', to: 'gk_fields_translations#core_yaml', as: 'gk_fields_core_texts_yaml'
 get  'gk_fields/translations/exchange',to: 'gk_fields_translations#exchange', as: 'gk_fields_exchange'
 post 'gk_fields/translations/exchange/review', to: 'gk_fields_translations#review', as: 'gk_fields_exchange_review'
-get  'gk_fields/translations/texts', to: 'gk_fields_translations#texts', as: 'gk_fields_texts'
 get  'gk_fields/translations/find', to: 'gk_fields_translations#find', as: 'gk_fields_find'
 get  'gk_fields/translations/changes', to: 'gk_fields_translations#changes', as: 'gk_fields_changes'
 match 'gk_fields/translations/propose', to: 'gk_fields_translations#propose', as: 'gk_fields_propose', via: %i[get post]
