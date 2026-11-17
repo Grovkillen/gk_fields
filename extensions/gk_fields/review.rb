@@ -86,11 +86,6 @@ module GkFields
       any?(user)
     end
 
-    def menu_caption(user)
-      n = waiting_for(user)
-      n.positive? ? "#{::I18n.t(:label_gk_fields_proposals)} (#{n})" : ::I18n.t(:label_gk_fields_proposals)
-    end
-
     def kind(entry) = entry.key.to_s.include?(":#{Translations::VALUE}:") ? 'list_value' : 'original'
 
     # The permission that proposes this kind of text: a list value has its own, for its consequences

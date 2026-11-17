@@ -1,13 +1,15 @@
 <%# The issue's head in its layout's sections (GkFields::Layouts.sections_for), with core's own row markup so that
-    themes and core's styles hold. locals: issue, rows (core's rows by key: [label, text]), sections. A section is a
-    details element, so that a folded one opens without script; above the lowest level it has the lock and its level in its
-    title, and the line "You see" names the levels the person sees fields in here. A field with an appearance of its
-    own is drawn by its field type (gk_appearance_tag), else as core draws it. %>
+    themes and core's styles hold. locals: issue, rows (core's rows by key: [label, text]), sections. A section is GK GUI
+    Stuff's group (its heading folds it; a section the layout folds starts folded); above the lowest level its heading
+    has the level's pill in its role, and its body starts with the lock: an icon whose popover says who sees it. "Du
+    ser" before the sections is a help icon whose popover names the levels the person sees fields in here. A field with
+    an appearance of its own is drawn by its field type (gk_appearance_tag), else as core draws it. %>
 <% levels = GkFields::Layouts.levels_seen(sections) %>
 <% level_name = ->(l) { GkFields::Layouts.level_label(l) } %>
-<%# You see: behind a small icon at the right of the first section's title, the words in its tooltip and for a screen reader %>
 <% you_see = l(:label_gk_fields_you_see, levels: levels.map(&level_name).join(', ')) %>
-<p class="gk-fields-you-see" data-gk-fields-levels="<%= levels.join(' ') %>"><span class="icon-only" title="<%= you_see %>" aria-label="<%= you_see %>" role="img"><%= sprite_icon('help', you_see) %></span></p>
+<div class="gk-fields-you-see" data-gk-fields-levels="<%= levels.join(' ') %>">
+  <%= gk_gui_stuff_popover(you_see, icon: 'help', icon_only: true, tap: true) { content_tag(:p, you_see) } %>
+</div>
 <% shown = lambda do |v, appearance, context|
      fmt = v.custom_field.format
      appearance != 'standard' && fmt.respond_to?(:gk_appearance_tag) ? fmt.gk_appearance_tag(self, v, appearance, context) : custom_field_value_tag(v)
@@ -34,12 +36,12 @@
 <% sections.each do |s| %>
   <% half = s['fields'].select { |f| f['width'] == 'half' } %>
   <% full = s['fields'] - half %>
-  <details class="gk-fields-section gk-fields-level-<%= s['level'] %> <%= GkFields::Layouts.level_classes(s['level']) %>" data-gk-fields-section="<%= s['key'] %>" data-gk-fields-level="<%= s['level'] %>"<%= ' open' unless s['collapsed'] %>>
-    <summary class="gk-fields-section-title"><span class="gk-fields-section-head">
-      <% if GkFields::Layouts.above_lowest?(s['level']) %><span class="gk-fields-lock"><%= sprite_icon('lock') %></span><% end %>
-      <span class="gk-fields-section-name"><%= s['title'] %></span>
-      <% if GkFields::Layouts.above_lowest?(s['level']) %><span class="badge gk-fields-level"><%= level_name.call(s['level']) %></span><% end %>
-    </span></summary>
+  <% role = GkFields::Layouts.level_role(s['level']) %>
+  <% title = role ? safe_join([s['title'], gk_gui_stuff_pill(level_name.call(s['level']), role: role)], ' ') : s['title'] %>
+  <%= gk_gui_stuff_group(title, collapsed: s['collapsed'] ? true : false,
+                         html: { class: "gk-fields-section gk-fields-level-#{s['level']} #{GkFields::Layouts.level_classes(s['level'])}",
+                                 'data-gk-fields-section' => s['key'], 'data-gk-fields-level' => s['level'] }) do %>
+    <%= render partial: 'gk_fields_layouts/lock', locals: { level: s['level'] } if role %>
     <% if half.any? %>
       <% if s['columns'] == 1 %>
         <div class="gk-fields-one-column"><%= safe_join(half.filter_map { |f| cell.call(f) }) %></div>
@@ -52,5 +54,5 @@
       <% end %>
     <% end %>
     <% full.each do |f| %><div class="gk-fields-full"><%= cell.call(f) %></div><% end %>
-  </details>
+  <% end %>
 <% end %>

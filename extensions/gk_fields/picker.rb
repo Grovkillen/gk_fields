@@ -30,7 +30,7 @@ module GkFields
     def wanted?(controller)
       req = controller.request
       controller.params[PARAM].to_s == '1' && req.get? && !req.xhr? && !controller.send(:api_request?) &&
-        (req.format.nil? || req.format.html?) && GkFields.feature?('fields.picker')
+        (req.format.nil? || req.format.html?) && GkFields.gui? && GkFields.feature?('fields.picker')
     rescue StandardError
       false
     end

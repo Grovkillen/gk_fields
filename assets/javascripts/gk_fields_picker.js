@@ -2,12 +2,13 @@
 // icon leads to that text. A text is found by its entry, never by its words: turning the picker on asks for the page
 // again with the picker's parameter, and on that page each name a translated reader or a list field's label gave ends
 // with an invisible mark carrying its entry's number (GkFields::Picker). The page gives the entries' keys in the
-// numbers' order (window.gkFieldsPickerConfig, drawn by PickerHooks); this script takes every mark out of the page and
+// numbers' order (the JSON element #gk-fields-picker-config, drawn by PickerHooks); this script takes every mark out of the page and
 // puts the icon where a mark stood inside #main. A mark in an attribute, a field's value, an option or the window's
 // title is only taken out. Turning the picker off hides the icons and takes the parameter out of the address; on again
-// shows them. Whoever has no row in gk_gui_stuff's three-dot menu on this page gets a small button at the bottom right.
+// shows them. Whoever has no row in GK GUI Stuff's three-dot menu on this page gets a small button at the bottom right.
 (function () {
-  var cfg = window.gkFieldsPickerConfig;
+  var data = document.getElementById('gk-fields-picker-config'), cfg = null;
+  try { cfg = data ? JSON.parse(data.textContent) : null; } catch (e) { cfg = null; }
   var gk = window.gkFields = window.gkFields || {};
   if (!cfg || gk.picker) return;
   var PARAM = cfg.param, keys = cfg.keys || [], taken = !!cfg.taken, on = taken, menu = !!cfg.menu, btn = null, icons = [];
@@ -25,23 +26,20 @@
     btn = document.createElement('a');
     btn.href = '#'; btn.id = 'gk-fields-picker'; btn.textContent = cfg.label; btn.title = cfg.title;
     btn.setAttribute('role', 'button'); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); btn.setAttribute('aria-label', cfg.title);
-    btn.style.cssText = 'display:inline-block;padding:3px 8px;font-size:0.85em;border:1px solid var(--oc-gray-5,#adb5bd);border-radius:3px;background:var(--oc-gray-0,#f8f9fa);';
-    if (on) btn.style.fontWeight = 'bold';
+    btn.className = 'gk-fields-picker-button'; // its look in gk_fields_picker.css
     btn.addEventListener('click', function (e) { e.preventDefault(); toggle(); });
     var row = document.createElement('div');
     row.className = 'gk-fields-picker-row';
-    row.style.cssText = 'display:flex;justify-content:flex-end;clear:both;margin:8px;';
     row.appendChild(btn);
     document.body.appendChild(row);
   }
   function icon(key) {
     var a = document.createElement('a'); a.className = 'gk-fields-pick';
-    if (window.GkGui && GkGui.icon) a.appendChild(GkGui.icon('edit', '\u270E', 12)); else a.textContent = '\u270E';
+    a.appendChild(window.GkGui.icon('edit', '\u270E', 12));
     a.href = cfg.find + '?key=' + encodeURIComponent(key); a.title = cfg.title;
-    // in the middle of the text's line wherever the text is (a value, a cell, a title), and as big as the text
-    a.style.cssText = 'margin-inline-start:3px;font-size:0.8em;text-decoration:none;display:inline-flex;align-items:center;vertical-align:middle;line-height:1;';
-    var svg = a.querySelector('svg'); if (svg) { svg.style.inlineSize = '1em'; svg.style.blockSize = '1em'; }
-    if (!on) a.style.display = 'none';
+    // in the middle of the text's line wherever the text is (a value, a cell, a title), and as big as the text: its look
+    // in gk_fields_picker.css; hidden while the picker is off
+    a.hidden = !on;
     icons.push(a);
     return a;
   }
@@ -81,15 +79,15 @@
     // a page without the marks is asked for again with them
     if (!taken) { window.location.href = address(true); return; }
     on = !on;
-    icons.forEach(function (a) { a.style.display = on ? 'inline-flex' : 'none'; });
-    if (btn) { btn.style.fontWeight = on ? 'bold' : ''; btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+    icons.forEach(function (a) { a.hidden = !on; });
+    if (btn) btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     try { window.history.replaceState(window.history.state, '', address(on)); } catch (e) { /* the address stays */ }
   }
   if (taken) { take(); window.addEventListener('load', take); }
   document.addEventListener('keydown', function (e) { if (e.altKey && e.shiftKey && (e.key === 'T' || e.key === 't')) { e.preventDefault(); toggle(); } });
   // the menu's row (gk_gui_stuff runs it as an action; its script is in the page's head). A page without a
   // three-dot menu has no row once the page is in, and gets the button.
-  if (window.GkGui && window.GkGui.actions) window.GkGui.actions.fields_picker = function () { toggle(); };
+  window.GkGui.actions.fields_picker = function () { toggle(); };
   if (!menu) button();
   else window.addEventListener('load', function () { if (!document.querySelector('[data-gk-gui-stuff-menu-key="fields_picker"]')) button(); });
   gk.picker = { toggle: toggle };

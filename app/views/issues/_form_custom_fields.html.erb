@@ -1,22 +1,39 @@
 <%# Core's partial for the issue form's custom fields (the same in every supported series), replaced: with a layout for the
     issue (edit, else show; GkFields::Layouts) the custom fields the person may edit are in the layout's sections, the
-    ones it does not name in Other last; core draws the core fields in its own part of the form as before. Without a
-    layout, core's partial exactly as it is (below). core_watch: core gets field order per tracker; then this goes. %>
+    ones it does not name in Other last; core draws the core fields in its own part of the form as before. A section is
+    GK GUI Stuff's group, with the level's pill and the lock as on the issue page. Without a layout (and always without
+    GK GUI Stuff, gate.rb), core's partial as it is (below), with two lines added: while the gate is closed no section
+    can be drawn, but the fields of a section above the person's ceiling are still left out
+    (GkFields::Layouts.hidden_closed; nothing with an open gate), and nothing of GK GUI Stuff is called. core_watch:
+    core gets field order per tracker; then this goes.
+    The group here is GK GUI Stuff's fold button (gk_gui_stuff_group_toggle) with the group's own classes and a body
+    whose id is the section's key, not gk_gui_stuff_group: that one numbers its bodies per view, and core's update_form
+    (edit.js, replaceIssueFormWith) draws this form again in a new view, so its numbers would repeat the ids of the
+    sections in the issue's head and a click here would fold a section there. The key is unique in a layout (Layouts.errors)
+    and the form is on the page once. Back to gk_gui_stuff_group when it takes an id of the caller's. %>
 <% sections = GkFields::Layouts.sections_for(@issue, User.current, scope: 'edit') %>
 <% if sections %>
   <% sections.each do |s| %>
-    <fieldset class="gk-fields-section gk-fields-level-<%= s['level'] %> <%= GkFields::Layouts.level_classes(s['level']) %>" data-gk-fields-section="<%= s['key'] %>" data-gk-fields-level="<%= s['level'] %>">
-      <legend><span class="gk-fields-section-head"><% if GkFields::Layouts.above_lowest?(s['level']) %><span class="gk-fields-lock"><%= sprite_icon('lock') %></span><% end %><span class="gk-fields-section-name"><%= s['title'] %></span>
-        <% if GkFields::Layouts.above_lowest?(s['level']) %><span class="badge gk-fields-level"><%= GkFields::Layouts.level_label(s['level']) %></span><% end %></span></legend>
-      <% s['fields'].each do |f| %>
-        <% value = f['custom_value'] %>
-        <p data-gk-fields-field="<%= f['key'] %>"><%= custom_field_tag_with_label :issue, value, :required => @issue.required_attribute?(value.custom_field_id) %></p>
-        <%= wikitoolbar_for "issue_custom_field_values_#{value.custom_field_id}", preview_issue_path(:project_id => @issue.project, :issue_id => @issue.id) if value.custom_field.full_text_formatting? %>
-      <% end %>
-    </fieldset>
+    <% role = GkFields::Layouts.level_role(s['level']) %>
+    <% title = role ? safe_join([s['title'], gk_gui_stuff_pill(GkFields::Layouts.level_label(s['level']), role: role)], ' ') : s['title'] %>
+    <% body_id = "gk-fields-form-section-#{s['key']}" %>
+    <section class="gk-gui-stuff-group gk-fields-section gk-fields-level-<%= s['level'] %> <%= GkFields::Layouts.level_classes(s['level']) %>"
+             data-gk-fields-section="<%= s['key'] %>" data-gk-fields-level="<%= s['level'] %>">
+      <h4 class="gk-gui-stuff-group-head"><%= gk_gui_stuff_group_toggle(title, open: true, controls: body_id) %></h4>
+      <div class="gk-gui-stuff-group-body" id="<%= body_id %>">
+        <%= render partial: 'gk_fields_layouts/lock', locals: { level: s['level'] } if role %>
+        <% s['fields'].each do |f| %>
+          <% value = f['custom_value'] %>
+          <p data-gk-fields-field="<%= f['key'] %>"><%= custom_field_tag_with_label :issue, value, :required => @issue.required_attribute?(value.custom_field_id) %></p>
+          <%= wikitoolbar_for "issue_custom_field_values_#{value.custom_field_id}", preview_issue_path(:project_id => @issue.project, :issue_id => @issue.id) if value.custom_field.full_text_formatting? %>
+        <% end %>
+      </div>
+    </section>
   <% end %>
 <% else %>
 <% custom_field_values = @issue.editable_custom_field_values %>
+<% gk_fields_hidden = GkFields::Layouts.hidden_closed(@issue, User.current, scope: 'edit') %>
+<% custom_field_values = custom_field_values.reject { |value| gk_fields_hidden.include?("cf:#{value.custom_field_id}") } if gk_fields_hidden.any? %>
 <% custom_field_values_full_width = custom_field_values.select { |value| value.custom_field.full_width_layout? } %>
 <% custom_field_values -= custom_field_values_full_width %>
 

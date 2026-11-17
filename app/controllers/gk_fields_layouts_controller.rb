@@ -9,6 +9,7 @@
 # REST (.json): the same, for administrators only, as the pages. An OAuth token also needs the scope
 # gk_fields_api_read to read and gk_fields_api_manage to change.
 class GkFieldsLayoutsController < ApplicationController
+  include GkFields::Gate::Controller # core's 404 without GK GUI Stuff (gate.rb)
   layout 'admin'
   self.main_menu = false
   menu_item :gk_fields_layouts

@@ -1,6 +1,7 @@
 <%# One text, by its entry's key (the picker's icon leads here) or by what it says on screen (every thing that carries the text): its
     languages, its changes, and the way to propose a new original. Everyone logged in may read it. %>
 <% html_title l(:label_gk_fields_translations), @text %>
+<% content_for :header_tags do %><%= stylesheet_link_tag('gk_fields_translations', plugin: :gk_fields) %><% end %>
 <h2><%= l(:label_gk_fields_translations) %> &#187; <%= @text %></h2>
 <% if @translations_on %>
 <p><%= link_to l(:label_gk_fields_changes), gk_fields_changes_path %><% if @may_translate %> &middot; <%= link_to l(:label_gk_fields_all_texts), gk_fields_translations_path %><% end %></p>

@@ -18,13 +18,5 @@
     <button class="tab-right icon-only" type="button" onclick="moveTabRight(this);"><%= sprite_icon('angle-right', rtl: true) %></button>
   </div>
 </div>
-<%# the tab shown is scrolled into view: each tab opens a page of its own, and core's row starts at the first tab; the row is found by its own id, never as the first div.tabs on the page %>
-<%= javascript_tag do %>
-window.addEventListener('load', function () {
-  var ul = document.querySelector('#gk-fields-translations-tabs ul'), a = ul && ul.querySelector('a.selected');
-  if (!a) return;
-  var li = a.parentNode;
-  if (li.offsetLeft + li.offsetWidth > ul.clientWidth) { ul.scrollLeft = li.offsetLeft - 20; }
-  if (typeof displayTabsButtons === 'function') displayTabsButtons();
-});
-<% end %>
+<%# the tab shown is scrolled into view (gk_fields_tabs.js): each tab opens a page of its own, and core's row starts at the first tab; the row is found by its own id, never as the first div.tabs on the page %>
+<%= javascript_include_tag 'gk_fields_tabs', plugin: :gk_fields %>

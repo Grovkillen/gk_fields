@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'delegate'
 require 'json'
 require 'yaml'
 
@@ -34,17 +35,26 @@ module GkFields
     # A REST body that is not { layout: { ... } } (the controller answers with core's 422)
     class BodyError < StandardError; end
 
-    # The function is on, gk_access is there (GkFields.layouts?) and the table is made
+    # The layouts are drawn: the gate is open, the function is on, gk_access is there (GkFields.layouts?) and the table
+    # is made
     def ready? = GkFields.layouts? && ::GkFieldsLayout.table_exists?
+
+    # What a layout's level hides is hidden: gk_access is there and the function is on. Never asks the gate, since a
+    # gate closes the drawing of the sections and never what they hide (hidden_keys)
+    def hiding? = GkFields.access? && GkFields.feature?('fields.layouts') ? true : false
 
     # ------------------------------------------------------------------ which layout
 
-    # The layout that applies to an issue in a scope (show, or edit, which falls back on show), read, or nil: the
-    # project's before the instance's, one for the issue's status before one for all statuses, the scope's own before
-    # show's
+    # The layout that is drawn for an issue in a scope (show, or edit, which falls back on show), read, or nil
     def for_issue(issue, scope = 'show')
       return nil unless issue&.tracker_id && ready?
 
+      stored_for(issue, scope)
+    end
+
+    # The stored layout that applies to an issue in a scope, whatever the gate and the function say: the project's
+    # before the instance's, one for the issue's status before one for all statuses, the scope's own before show's
+    def stored_for(issue, scope = 'show')
       scopes = scope.to_s == 'edit' ? %w[edit show] : %w[show]
       list = ::GkFieldsLayout.where(tracker_id: issue.tracker_id, project_id: [issue.project_id, nil].uniq,
                                     status_id: [issue.status_id, nil].uniq, scope: scopes).to_a
@@ -119,6 +129,15 @@ module GkFields
       ["gk-fields-level-rank-#{step}", ('gk-fields-level-strict' if step >= 2)].compact.join(' ')
     end
 
+    # The role of a level's pill (GK GUI Stuff's pill), by the same steps: the first step above the lowest warning,
+    # every step above it alarm; the lowest has no pill (nil)
+    def level_role(key)
+      step = level_step(key)
+      return nil unless step.positive?
+
+      step >= 2 ? :alarm : :warning
+    end
+
     # A field's level from core's visibility: a custom field visible only to some roles has the first level above the
     # lowest, any other the lowest
     def field_level(cf)
@@ -134,6 +153,8 @@ module GkFields
 
     # A level a layout names is in use, so gk_access never removes it (init.rb, once every plugin is in, when gk_access
     # is there). A saved layout counts also while the function is off: it stands untouched and may be used again.
+    # Registered whatever the gate says (gate.rb): gk_access answers with a closed gate too, and a level a stored
+    # layout needs must not be removed meanwhile.
     def register_levels!
       ::GkAccess.register_user('fields.layouts') do |level|
         GkFields.access? && ::GkFieldsLayout.table_exists? && ::GkFieldsLayout.find_each.any? { |l| levels_in(l.data).include?(level.key) }
@@ -314,6 +335,60 @@ module GkFields
       out
     end
 
+    # The keys ("cf:<id>" and core's) of the fields a layout hides from a person on an issue: the fields of the sections
+    # whose level the person's ceiling does not reach, Other included. It is what sections_for leaves out, so the two
+    # never differ: every field the person sees in core (scope show: the visible custom fields and core's fields; edit:
+    # the custom fields the person may edit) that stands in none of the sections drawn for her. [] without a layout,
+    # without gk_access and with the function off (hiding?). It never asks the gate: with a closed gate no section is
+    # drawn, and core draws the issue without these fields (ShowPatch, the form's view). layout: a layout given instead
+    # of the stored one.
+    def hidden_keys(issue, user = ::User.current, scope: 'show', layout: nil)
+      return [] unless issue && hiding?
+
+      data = layout || (stored_for(issue, scope) if issue.tracker_id && ::GkFieldsLayout.table_exists?)
+      seen = data.is_a?(Hash) ? sections_for(issue, user, scope: scope, layout: data) : nil
+      return [] unless seen
+
+      every_key(issue, user, scope) - seen.flat_map { |s| s['fields'].map { |f| f['key'] } }
+    end
+
+    # Every key a person sees in core on an issue, in a scope (see hidden_keys)
+    def every_key(issue, user, scope)
+      edit = scope.to_s == 'edit'
+      values = edit ? issue.editable_custom_field_values(user) : issue.visible_custom_field_values(user)
+      (edit ? [] : CORE.keys) + values.map { |v| "cf:#{v.custom_field_id}" }
+    end
+
+    # What core's own drawing leaves out while the gate is closed: nothing with an open gate (the sections are drawn
+    # then, and they leave out the same), else hidden_keys. If the question itself fails, every field is left out
+    # and the failure is written to the log: rather too much hidden than a field shown that a level hides. The page is
+    # then drawn without the fields (scope show: core's rows that have a class in CORE and every custom field; edit:
+    # every custom field) instead of failing.
+    def hidden_closed(issue, user = ::User.current, scope: 'show')
+      return [] if GkFields.gui?
+
+      begin
+        hidden_keys(issue, user, scope: scope)
+      rescue StandardError => e
+        Rails.logger.warn("[gk_fields] what the layout hides not read, every field left out: #{e.class} #{e.message}")
+        all_keys(issue, scope)
+      end
+    end
+
+    # Stands for every key, when not even the issue's values can be read
+    EVERYTHING = Class.new do
+      def include?(_key) = true
+      def empty? = false
+      def any? = true
+    end.new.freeze
+
+    # Every field of an issue in a scope, without asking who sees what (the reserve of hidden_closed); it never fails
+    def all_keys(issue, scope)
+      (scope.to_s == 'edit' ? [] : CORE.keys) + issue.custom_field_values.map { |v| "cf:#{v.custom_field_id}" }
+    rescue StandardError
+      EVERYTHING
+    end
+
     # The levels a person sees fields in, in order (the line "You see")
     def levels_seen(sections) = level_keys.select { |l| Array(sections).any? { |s| s['level'] == l } }
 
@@ -367,14 +442,64 @@ module GkFields
       end
     end
 
-    # Core patch (Patches.apply!): core's helpers for the issue page's attributes, only for the page itself
-    # (issues/show) and only when the issue has a layout: core's rows are kept (issue_fields_rows), the layout's
-    # sections are drawn where core draws the half width custom fields, and the full width ones are in the sections
-    # already. Other views that call issue_fields_rows (meetings, verifications) and an issue without a layout get
-    # core's as it is.
+    # Core's rows on the issue page while the gate is closed, with the hidden ones held back: core's own collector
+    # (IssuesHelper::IssueFieldsRows) behind it draws the rest as core does. A row is known by the class core gives it
+    # (CORE); a row without one of those classes (a custom field's, another plugin's) passes.
+    class Sieve < SimpleDelegator
+      def initialize(rows, hidden)
+        super(rows)
+        @gk_fields_hidden = hidden
+      end
+
+      def left(*args) = pass(:left, args)
+      def right(*args) = pass(:right, args)
+
+      private
+
+      def pass(side, args)
+        key = args[2].is_a?(Hash) ? CORE.key(args[2][:class].to_s.split.first) : nil
+        return __getobj__.public_send(side) if key && @gk_fields_hidden.include?(key)
+
+        __getobj__.public_send(side, *args)
+      end
+    end
+
+    # The issue as core's two helpers for the custom fields' rows ask it while the gate is closed: the same issue, whose
+    # visible custom field values lack the hidden ones. Core's helpers draw the rest with their own markup.
+    class Shown < SimpleDelegator
+      def initialize(issue, hidden)
+        super(issue)
+        @gk_fields_hidden = hidden
+      end
+
+      def visible_custom_field_values(user = nil)
+        __getobj__.visible_custom_field_values(user).reject { |v| @gk_fields_hidden.include?("cf:#{v.custom_field_id}") }
+      end
+    end
+
+    # Core patch (Patches.protect!, set whatever the gate says): core's helpers for the issue page's attributes, only
+    # for the page itself (issues/show). Other views that call issue_fields_rows (meetings, verifications) get core's
+    # as it is.
+    # * Gate open, and the issue has a layout: core's rows are kept (issue_fields_rows), the layout's sections are
+    #   drawn where core draws the half width custom fields, and the full width ones are in the sections already. An
+    #   issue without a layout gets core's as it is.
+    # * Gate closed: no section is drawn (nothing of GK GUI Stuff is called), core draws the issue, and what the
+    #   layout's level hides from the person is left out (Layouts.hidden_closed). Core's rows go through Sieve, which
+    #   holds back the hidden ones; core's two helpers for the custom fields get the issue as Shown, whose values lack
+    #   the hidden ones. Nothing of core's markup is written here. Should core's helper fail on Shown, the whole block
+    #   of custom fields is left out instead: rather too much hidden than a hidden field shown. Without a layout,
+    #   without gk_access or with the function off nothing is hidden and core's is as it is.
     module ShowPatch
       def issue_fields_rows(&block)
-        return super unless @virtual_path == 'issues/show' && @gk_fields_rows.nil? && (lay = GkFields::Layouts.for_issue(@issue, 'show'))
+        return super unless @virtual_path == 'issues/show'
+
+        unless GkFields.gui?
+          hidden = gk_fields_hidden(@issue)
+          return super if hidden.empty? || block.nil?
+
+          return super() { |rows| block.call(GkFields::Layouts::Sieve.new(rows, hidden)) }
+        end
+        return super unless @gk_fields_rows.nil? && (lay = GkFields::Layouts.for_issue(@issue, 'show'))
 
         @gk_fields_rows = GkFields::Layouts::Collector.new
         @gk_fields_layout = lay
@@ -383,6 +508,10 @@ module GkFields
       end
 
       def render_half_width_custom_fields_rows(issue)
+        unless GkFields.gui?
+          hidden = gk_fields_hidden(issue)
+          return hidden.empty? ? super : gk_fields_without(issue, hidden) { |shown| super(shown) }
+        end
         return super unless @gk_fields_layout && !@gk_fields_drawn
 
         @gk_fields_drawn = true
@@ -391,7 +520,28 @@ module GkFields
       end
 
       def render_full_width_custom_fields_rows(issue)
+        unless GkFields.gui?
+          hidden = gk_fields_hidden(issue)
+          return hidden.empty? ? super : gk_fields_without(issue, hidden) { |shown| super(shown) }
+        end
         @gk_fields_drawn ? ''.html_safe : super
+      end
+
+      private
+
+      # What the layout hides from the person on this page while the gate is closed, asked once per issue and page
+      def gk_fields_hidden(issue)
+        return [] unless @virtual_path == 'issues/show' && issue
+
+        (@gk_fields_hidden ||= {}.compare_by_identity)[issue] ||= GkFields::Layouts.hidden_closed(issue, ::User.current)
+      end
+
+      # Core's helper drawn for the issue without the hidden values; if that fails, nothing of the block
+      def gk_fields_without(issue, hidden)
+        yield GkFields::Layouts::Shown.new(issue, hidden)
+      rescue StandardError => e
+        Rails.logger.warn("[gk_fields] custom fields left out of the issue page, core's rows not drawn without the hidden ones: #{e.class} #{e.message}")
+        ''.html_safe
       end
     end
   end

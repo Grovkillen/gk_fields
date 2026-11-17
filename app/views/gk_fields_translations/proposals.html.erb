@@ -1,30 +1,33 @@
 <%# The proposals: a reviewer sees all and decides; everyone else sees her own. Pending first, a filter by state with
-    the count of each, the state as a badge in its colour and a line in the same colour at the start of the row %>
+    the count of each (GK GUI Stuff's count), the state as GK GUI Stuff's pill with a dot in its role (waiting info,
+    approved saved, rejected alarm), and what came since the person was here last with the flag New %>
 <% html_title l(:label_gk_fields_proposals) %>
 <% content_for :header_tags do %><%= stylesheet_link_tag('gk_fields_translations', plugin: :gk_fields) %><% end %>
 <h2><%= l(:label_gk_fields_proposals) %></h2>
 <p><%= l(@reviewer ? :text_gk_fields_proposals_reviewer : :text_gk_fields_proposals_own) %></p>
 <% counts = @counts || {} %>
+<% state_roles = { 'pending' => :info, 'approved' => :saved, 'rejected' => :alarm } %>
 <p class="gk-fields-proposal-filter">
   <% fresh = @fresh || [] %>
   <% if fresh.any? || @state == 'since' %>
-    <%= link_to l(:label_gk_fields_since_last) + " (#{fresh.size})", gk_fields_proposals_path(state: 'since'), class: (@state == 'since' ? 'selected' : nil) %> &middot;
+    <%= link_to safe_join([l(:label_gk_fields_since_last), gk_gui_stuff_count(fresh.size)], ' '), gk_fields_proposals_path(state: 'since'), class: (@state == 'since' ? 'selected' : nil) %> &middot;
   <% end %>
-  <%= link_to l(:label_all).capitalize + " (#{counts.values.sum})", gk_fields_proposals_path(all: 1), class: (@state.nil? ? 'selected' : nil) %>
+  <%= link_to safe_join([l(:label_all).capitalize, gk_gui_stuff_count(counts.values.sum)], ' '), gk_fields_proposals_path(all: 1), class: (@state.nil? ? 'selected' : nil) %>
   <% %w[pending approved rejected].each do |s| %>
-    &middot; <%= link_to l("label_gk_fields_state_#{s}") + " (#{counts[s].to_i})", gk_fields_proposals_path(state: s), class: (@state == s ? 'selected' : nil) %>
+    &middot; <%= link_to safe_join([l("label_gk_fields_state_#{s}"), gk_gui_stuff_count(counts[s].to_i)], ' '), gk_fields_proposals_path(state: s), class: (@state == s ? 'selected' : nil) %>
   <% end %>
 </p>
 <% if @proposals.empty? %><p class="nodata"><%= l(:label_no_data) %></p><% else %>
-<div class="autoscroll"><table class="list gk-fields-proposals"><thead><tr>
+<div class="autoscroll"><table class="list gk-fields-texts gk-fields-proposals"><thead><tr>
   <th><%= l(:field_status) %></th><th><%= l(:field_created_on) %></th><th><%= l(:label_gk_fields_thing) %></th>
   <th><%= l(:label_gk_fields_before) %></th><th><%= l(:label_gk_fields_after) %></th>
   <th><%= l(:label_gk_fields_reason) %></th><th><%= l(:label_gk_fields_by) %></th><th></th>
 </tr></thead><tbody>
 <% @proposals.each do |p| %>
-  <tr class="gk-fields-proposal-<%= p.state %><%= ' gk-fields-proposal-fresh' if (@fresh || []).include?(p.id) %>">
-    <td class="status"><span class="badge gk-fields-proposal-state gk-fields-proposal-state-<%= p.state %>"><%= l("label_gk_fields_state_#{p.state}") %></span>
-      <% if (@fresh || []).include?(p.id) %><span class="badge gk-fields-proposal-new"><%= l(:label_gk_fields_new_since_last) %></span><% end %></td>
+  <tr class="gk-fields-proposal-<%= p.state %>">
+    <td class="status"><%= gk_gui_stuff_pill(l("label_gk_fields_state_#{p.state}"), role: state_roles[p.state], dot: true,
+                                             html: { class: "gk-fields-proposal-state gk-fields-proposal-state-#{p.state}" }) %>
+      <% if fresh.include?(p.id) %><%= gk_gui_stuff_flag(l(:label_gk_fields_new_since_last), inline: true, kind: :new) %><% end %></td>
     <td class="created_on"><%= format_time(p.created_at) %></td>
     <td class="name"><%= p.thing %>, <%= p.what %></td>
     <%# What was not used is struck: the text before when the proposal is approved, the proposed text when it is rejected %>

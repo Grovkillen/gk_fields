@@ -1,21 +1,33 @@
-<%# gk_fields: a line first when gk_access is missing (required for the layouts; without it the rest works), About the plugin with links to
-    its pages (those whose function is on), the languages what is set up is offered in, then the change log. The fields show what is stored (empty: the
+<%# gk_fields: first what is missing. A closed gate is core's own warning line (nothing of GK GUI Stuff can draw it
+    then), and it says the first thing that is not met: GK GUI Stuff is missing, it is too old (with the version
+    required), or it is installed in the right version but not active (with a link to its own settings page, which
+    says why). Then only About the plugin: nothing else is drawn, and the stored settings go back as hidden fields,
+    because core's Save on this page writes what is posted over what is stored (an empty list comes back as [""],
+    which is read as no list). With GK GUI Stuff: gk_access missing is GK GUI Stuff's banner (required for the layouts;
+    without it the rest works), About the plugin with links to its pages (those whose function is on; none with a
+    closed gate, where the pages answer 404), the languages
+    what is set up is offered in, then the change log (GK GUI Stuff's). The fields show what is stored (empty: the
     default, which the placeholder names), so that saving the page never writes the default in. %>
 <% plugin = Redmine::Plugin.find(:gk_fields) %>
-<% changelog = ["CHANGELOG.#{current_language}.md", 'CHANGELOG.md'].map { |f| File.join(plugin.directory, f) }.find { |f| File.exist?(f) } %>
+<% gui_closed = GkFields.gui_closed %>
+<% gui = gui_closed.nil? %>
 <% stored = settings || {} %>
 <% default_language = Setting.default_language.to_s %>
-<% unless GkFields.access? %>
-  <div class="flash warning gk-fields-requires"><%= l(:text_gk_fields_access_missing) %></div>
+<% if gui_closed == :missing %><p class="warning"><%= l(:text_gk_fields_gui_stuff_missing) %></p>
+<% elsif gui_closed == :old %><p class="warning"><%= l(:text_gk_fields_gui_stuff_required, version: GkFields::GUI_STUFF_MIN) %></p>
+<% elsif gui_closed == :inactive %><p class="warning"><%= l(:text_gk_fields_gui_stuff_inactive) %> <%= link_to l(:label_gk_fields_gui_stuff_settings), plugin_settings_path('gk_gui_stuff') %></p><% end %>
+<% if gui && !GkFields.access? %>
+  <span hidden data-gk-fields-banner="<%= l(:text_gk_fields_access_missing) %>" data-gk-fields-banner-level="warning"></span>
 <% end %>
 <fieldset class="box"><legend><%= l(:label_gk_fields_about) %></legend>
   <div><strong><%= plugin.name %></strong> <%= plugin.version %></div>
   <div><%= l(:text_gk_fields_description) %></div>
   <% links = [] %>
-  <% links << link_to(l(:label_gk_fields_translations), gk_fields_translations_path) if GkFields.feature?('fields.translations') %>
+  <% links << link_to(l(:label_gk_fields_translations), gk_fields_translations_path) if gui && GkFields.feature?('fields.translations') %>
   <% links << link_to(l(:label_gk_fields_layouts), gk_fields_layouts_path) if GkFields.layouts? %>
   <% if links.present? %><div><%= safe_join(links, ', ') %></div><% end %>
 </fieldset>
+<% if gui %>
 <fieldset class="box tabular"><legend><%= l(:label_gk_fields_languages) %></legend>
 <%# The languages as Redmine names them (the list on My account): one for the language names are written in, with
     Redmine's default language as the empty choice, and any number to offer. A value stored before as a line of codes
@@ -28,32 +40,22 @@
   <%= select_tag 'settings[core_language]', options_for_select([[l(:text_gk_fields_core_language_default, language: default_language), '']] + langs, stored['core_language'].to_s),
                  id: 'settings_core_language' %>
   <em class="info"><%= l(:text_gk_fields_core_language) %></em></p>
+<%# The languages to offer through GK GUI Stuff's searchable chooser (GkGui.selectSearch, DESIGN_GUIDE 6b; gk_fields_settings.js):
+    the chosen ones as pills with a cross, and a field that narrows the list as one writes (Enter takes the first,
+    Backspace takes off the last). The list stays in the form, hidden by the chooser, and is what is saved. %>
 <p><label for="settings_content_languages"><%= l(:field_gk_fields_content_languages) %></label>
   <%= hidden_field_tag 'settings[content_languages][]', '', id: nil %>
   <%= select_tag 'settings[content_languages][]', options_for_select(langs, offered), multiple: true, size: 8,
-                 id: 'settings_content_languages', title: l(:text_gk_fields_content_languages_default, languages: [default_language, 'en'].uniq.join(', ')) %>
+                 id: 'settings_content_languages', title: l(:text_gk_fields_content_languages_default, languages: [default_language, 'en'].uniq.join(', ')),
+                 data: { gk_fields_select_search: '1' } %>
   <em class="info"><%= l(:text_gk_fields_content_languages) %> <%= l(:text_gk_fields_content_languages_default, languages: [default_language, 'en'].uniq.join(', ')) %></em></p>
 </fieldset>
-<%# The languages to offer through gk_gui_stuff's searchable chooser (GkGui.selectSearch, DESIGN_GUIDE 6b): the chosen
-    ones as pills with a cross, and a field that narrows the list as one writes (Enter takes the first, Backspace
-    takes off the last). The list above stays in the form, hidden by the chooser, and is what is saved; without
-    gk_gui_stuff it is the list itself. %>
-<%= javascript_tag do %>
-(function () {
-  function start() {
-    var sel = document.getElementById('settings_content_languages');
-    var S = window.GkGui && window.GkGui.selectSearch;
-    if (!sel || !S || !S.enhance || sel.dataset.gkGuiSs) return;
-    S.enhance(sel);
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
-})();
-<% end %>
-<% if changelog %>
-<fieldset class="box"><legend><%= l(:label_gk_fields_changelog) %></legend>
-  <% unless current_language.to_s.start_with?('en') %><div class="gk-changelog-note"><em><%= l(:text_gk_fields_changelog_english) %></em></div><% end %>
-  <details class="gk-changelog"><summary><%= l(:button_show) %></summary>
-  <div class="wiki"><%= Redmine::WikiFormatting.to_html('common_mark', File.read(changelog, encoding: 'UTF-8').sub(/\A.*?(?=^## )/m, '')).html_safe %></div>
-  </details>
-</fieldset>
+<%= javascript_include_tag 'gk_fields_settings', plugin: :gk_fields %>
+<%= gk_gui_stuff_changelog(:gk_fields) %>
+<% else %>
+  <%= hidden_field_tag 'settings[core_language]', stored['core_language'].to_s, id: nil %>
+  <% kept = stored['content_languages'] %>
+  <% kept = kept.to_s.split(/[\s,]+/) unless kept.is_a?(Array) %>
+  <% kept = kept.map(&:to_s).reject(&:empty?) %>
+  <% (kept.empty? ? [''] : kept).each do |lang| %><%= hidden_field_tag 'settings[content_languages][]', lang, id: nil %><% end %>
 <% end %>

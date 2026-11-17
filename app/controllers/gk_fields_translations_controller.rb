@@ -10,6 +10,7 @@
 # gk_fields_api_manage to change, besides the permission, which core asks of a token itself; an administrator's
 # token needs only the scope, and then counts as an administrator in every rule (acts_as_admin?).
 class GkFieldsTranslationsController < ApplicationController
+  include GkFields::Gate::Controller # core's 404 without GK GUI Stuff (gate.rb)
   self.main_menu = false
   layout :pick_layout
 

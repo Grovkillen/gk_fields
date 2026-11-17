@@ -101,6 +101,11 @@ module GkFields
       value
     end
 
+    # The format in core's list of custom field formats (Redmine::FieldFormat.add, as Base.add does), so that it can be
+    # chosen and its fields are drawn by it; only while the gate is open (Gate.start!, each preparation). Without GK GUI
+    # Stuff the format is not in the list, and a field of it is what core makes of an unknown format.
+    def register_format! = ::Redmine::FieldFormat.add(FORMAT, Format)
+
     # Core patch for the filter (Patches.apply!). Core's date operators make the start and end of the chosen days in
     # the reader's time zone and write them as text without zone (Query#quoted_time) to compare with the stored text,
     # which is in UTC; a meeting between midnight and 02:00 Swedish time then fell on the day before. For this format
@@ -137,7 +142,8 @@ module GkFields
       self.searchable_supported = false
       self.totalable_supported = false
       self.form_partial = nil
-      add FORMAT
+      # its name only: the format is added to core's list by register_format!, and only with GK GUI Stuff (gate.rb)
+      self.format_name = FORMAT
 
       def label = 'label_gk_fields_format_datetime'
 

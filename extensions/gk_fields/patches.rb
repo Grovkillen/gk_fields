@@ -1,11 +1,23 @@
 # frozen_string_literal: true
 
 module GkFields
-  # Core patches, all in one place. Each says what it assumes of core; the modules themselves stay beside the code
-  # they belong to. init.rb calls apply! while Redmine prepares the application, and Redmine runs init.rb again on
-  # every preparation (a reload in development), when the reloaded core classes need the patches again; each prepend is
-  # guarded against a second one, so a class already patched is left as it is. A part that fails is written to the log
-  # and the others are still applied.
+  # Core patches, all in one place, in two layers. Each says what it assumes of core; the modules themselves stay
+  # beside the code they belong to. Redmine runs init.rb again on every preparation (a reload in development), when
+  # the reloaded core classes need the patches again; each prepend is guarded against a second one, so a class already
+  # patched is left as it is. A part that fails is written to the log and the others are still applied.
+  #
+  # The protection (protect!), set by init.rb whatever the gate says, and once more at the end of each preparation
+  # (Gate::Boot) in case it failed there. Set in init.rb it lies inside a patch that a plugin loaded later puts on the
+  # same three methods; assumed: no other plugin patches them (none of the GK plugins does), so the order has no
+  # effect. The patch:
+  # * IssuesHelper#issue_fields_rows, #render_half_width_custom_fields_rows and #render_full_width_custom_fields_rows
+  #   (Layouts::ShowPatch): issues/show calls them, in that order, to draw the issue's attributes. With an open gate
+  #   and a layout the rows are kept and drawn in the layout's sections. With a closed gate core draws them, without
+  #   what the layout's level hides from the person. Assumes, the same in every supported series: issue_fields_rows
+  #   yields a collector whose left and right take (label, text, class: ...), with the class of core's field first;
+  #   the two helpers for the custom fields take the issue and ask it visible_custom_field_values and nothing else.
+  #
+  # The interface (apply!), set when the gate opens (Gate.start!):
   # * Tracker, IssueStatus, Enumeration, Role, IssueCategory, CustomField (Translations.install_reader): the readers
   #   of name and description, which core's views call to show the thing; a reader gives the translation when
   #   translation is on for the request and the record is saved, else core's value. A plugin's model registered with
@@ -24,13 +36,15 @@ module GkFields
   #   up; put in again at each request and mail (CoreTexts.refresh!) if anything replaced it.
   # * Query#sql_for_custom_field and Query#quoted_time (DateTime::QueryPatch): core's date operators on a custom
   #   field write the bounds of a day through quoted_time; for the format Date and time they are written in UTC.
-  # * IssuesHelper#issue_fields_rows, #render_half_width_custom_fields_rows and #render_full_width_custom_fields_rows
-  #   (Layouts::ShowPatch): issues/show calls them, in that order, to draw the issue's attributes; with a layout the
-  #   rows are kept and drawn in the layout's sections.
   # The view app/views/issues/_form_custom_fields.html.erb replaces core's partial of the same name (the custom fields
-  # of the issue form); without a layout it is core's partial as it is in every supported series.
+  # of the issue form); without a layout it is core's partial as it is in every supported series, and with a closed
+  # gate without the fields the layout's level hides from the person.
   module Patches
     module_function
+
+    def protect!
+      prepend!(::IssuesHelper, Layouts::ShowPatch)
+    end
 
     def apply!
       readers!
@@ -41,7 +55,6 @@ module GkFields
       prepend!(::Mailer, Translations::MailerPatch)
       CoreTexts.install!
       prepend!(::Query, DateTime::QueryPatch)
-      prepend!(::IssuesHelper, Layouts::ShowPatch)
     end
 
     def readers!

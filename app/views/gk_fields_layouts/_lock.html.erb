@@ -1,0 +1,8 @@
+<%# The lock of a section above the lowest level, in the issue's head and its form: GK GUI Stuff's popover as an icon
+    in the line (tap), whose box says that only whoever reaches the level sees the section. locals: level %>
+<% name = GkFields::Layouts.level_label(level) %>
+<div class="gk-fields-lock">
+  <%= gk_gui_stuff_popover(l(:label_gk_fields_section_lock, level: name), icon: 'lock', icon_only: true, tap: true) do %>
+    <p><%= l(:text_gk_fields_section_lock, level: name) %></p>
+  <% end %>
+</div>

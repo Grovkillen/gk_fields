@@ -1,37 +1,26 @@
-/* Proposed texts (gk_fields_translations#proposals): the state as an outlined badge in its colour, as core's status
-   badges, and a line in the same colour at the start of the row; the texts start where their column starts. */
-table.gk-fields-proposals td.name,
-table.gk-fields-proposals td.text,
-table.gk-fields-proposals td.decision { text-align: start; }
+/* Translations (gk_fields_translations): the lists of texts, changes, Redmine's texts, the review of a pasted text and
+   the proposals. The texts start where their column starts; a proposal's state is GK GUI Stuff's pill and what came
+   since last its flag, so this sheet only places things. */
+table.gk-fields-texts td.name,
+table.gk-fields-texts td.text,
+table.gk-fields-texts td.decision { text-align: start; }
 
 table.gk-fields-proposals td.status { white-space: nowrap; }
-
-.gk-fields-proposal-state {
-  inset-block-end: 0;
-  font-weight: normal;
-  vertical-align: middle;
-  border: 1px solid currentColor;
-}
-.gk-fields-proposal-state-pending { color: var(--oc-blue-9, #1864ab); }
-.gk-fields-proposal-state-approved { color: var(--oc-green-9, #2b8a3e); }
-.gk-fields-proposal-state-rejected { color: var(--oc-red-9, #c92a2a); }
-
-tr.gk-fields-proposal-pending > td:first-child { box-shadow: inset 3px 0 0 var(--oc-blue-7, #1c7ed6); }
-tr.gk-fields-proposal-approved > td:first-child { box-shadow: inset 3px 0 0 var(--oc-green-7, #37b24d); }
-tr.gk-fields-proposal-rejected > td:first-child { box-shadow: inset 3px 0 0 var(--oc-red-7, #f03e3e); }
 
 /* what was decided is quieter than what waits */
 tr.gk-fields-proposal-approved td.before,
 tr.gk-fields-proposal-rejected td.after,
-.gk-fields-decided { color: var(--oc-gray-6, #868e96); }
+.gk-fields-decided { color: var(--gk-role-ui-muted, var(--oc-gray-6, #868e96)); }
 
 .gk-fields-proposal-filter a.selected { font-weight: bold; }
 
-/* what happened since the person was here last: a small badge New and a light row */
-.gk-fields-proposal-new {
-  inset-block-end: 0;
-  vertical-align: middle;
-  color: var(--oc-white, #fff);
-  background: var(--oc-indigo-5, #5c7cfa);
+/* Copy and paste: the rows of the box start at its edge, and the YAML fills the box's width in a monospace font */
+.gk-fields-flush { padding-inline-start: 0; }
+
+.gk-fields-yaml {
+  inline-size: 100%;
+  font-family: monospace;
 }
-tr.gk-fields-proposal-fresh > td { background-color: var(--oc-indigo-0, #edf2ff); }
+
+/* a proposal's Send, with its reason under the box's buttons */
+.gk-fields-propose-buttons { margin-block: 1em; }

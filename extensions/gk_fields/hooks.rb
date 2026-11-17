@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
 module GkFields
-  # The view listeners (Redmine::Hook), registered in init.rb
+  # The view listeners (Redmine::Hook), registered in init.rb; each is silent without GK GUI Stuff (Gate::Listener)
 
   # The picker: for whoever may administer texts, Alt+Shift+T and the row Show the texts that can be changed in
   # gk_gui_stuff's three-dot menu (registered in init.rb) show an icon at every text on the page that can be
-  # administered; the icon leads to that text. Whoever does not get the menu's rows (no gui_stuff, or its menu off
-  # for her), and a page without a three-dot menu, get a small button at the bottom right instead.
+  # administered; the icon leads to that text. Whoever does not get the menu's rows (its menu off for her), and a page
+  # without a three-dot menu, get a small button at the bottom right instead.
   # A text is found by its entry, never by its words: turning the picker on asks for the page again with
   # gk_fields_pick=1, and on that page each name a translated reader or a list field's label gave ends with an
   # invisible mark carrying its entry's number (Picker). This hook writes the entries' keys in the numbers' order;
@@ -14,24 +14,41 @@ module GkFields
   # attribute, a field's value, an option or the window's title is only taken out. Turning the picker off hides the
   # icons and takes the parameter out of the address; on again shows them.
   class PickerHooks < Redmine::Hook::ViewListener
+    include Gate::Listener
+
+    # the picker's own small stylesheet (the button and the icons), on the pages the picker is drawn on
+    def view_layouts_base_html_head(_context = {})
+      return '' unless picker?
+
+      stylesheet_link_tag('gk_fields_picker', plugin: :gk_fields)
+    end
+
     def view_layouts_base_body_bottom(context = {})
-      return '' unless GkFields.feature?('fields.picker') && Review.any?(User.current) # A declared function
+      return '' unless picker?
 
       label = ::I18n.t(:label_gk_fields_picker)
       title = ::I18n.t(:text_gk_fields_picker)
       # the row in the menu stands in for the button
-      menu = defined?(::GkGuiStuff::Menu) && ::GkGuiStuff::Menu.on_for?(User.current) ? true : false
+      menu = ::GkGuiStuff::Menu.on_for?(User.current) ? true : false
       c = context[:controller]
       asked = c && c.params[Picker::PARAM].to_s == '1' ? true : false
-      # the script (assets/javascripts/gk_fields_picker.js) reads what it needs from the page; drawn at the bottom of the
-      # body, it runs once the page above it is in
+      # the script (assets/javascripts/gk_fields_picker.js) reads what it needs from the JSON element before it; drawn at
+      # the bottom of the body, it runs once the page above it is in
       config = { param: Picker::PARAM, keys: Picker.keys, taken: asked, menu: menu, label: label, title: title, find: gk_fields_find_path }
-      javascript_tag("window.gkFieldsPickerConfig = #{config.to_json};") + javascript_include_tag('gk_fields_picker', plugin: :gk_fields)
+      content_tag(:script, json_escape(config.to_json).html_safe, type: 'application/json', id: 'gk-fields-picker-config') +
+        javascript_include_tag('gk_fields_picker', plugin: :gk_fields)
     end
+
+    private
+
+    # A declared function, for whoever may work with texts
+    def picker? = GkFields.feature?('fields.picker') && Review.any?(User.current)
   end
 
   # The sections' small stylesheet, on the pages that may draw them (an issue, its form, the administration page)
   class LayoutHooks < Redmine::Hook::ViewListener
+    include Gate::Listener
+
     def view_layouts_base_html_head(context = {})
       c = context[:controller]
       return '' unless c.is_a?(::IssuesController) || c.is_a?(::GkFieldsLayoutsController)
@@ -48,6 +65,8 @@ module GkFields
   # lines up with core's buttons where the page has them. Nothing on core's page is looked for. Without the hook (no
   # gk_core_stuff, or another plugin's copy of the layout) the link is not drawn.
   class AdminLinkHooks < Redmine::Hook::ViewListener
+    include Gate::Listener
+
     TABS = { 'trackers' => 'Tracker', 'issue_statuses' => 'IssueStatus', 'roles' => 'Role', 'enumerations' => 'Enumeration',
              'custom_fields' => 'CustomField' }.freeze
 

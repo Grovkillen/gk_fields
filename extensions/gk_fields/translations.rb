@@ -1,9 +1,11 @@
 # frozen_string_literal: true
 
 module GkFields
-  # A declared function in records' register ('fields.translations', 'fields.picker'); off until switched on, and
-  # off when records is not there. Only the pages, menus and the picker ask: translations already stored
-  # apply whatever the switch says.
+  # A declared function in records' register ('fields.translations', 'fields.picker', 'fields.layouts'); off until
+  # switched on, and off when records is not there. It never asks the gate: the register answers as it is stored, and
+  # what draws has a gate of its own (the controllers, the listeners, the menus, GkFields.layouts?), while what a
+  # layout's level hides goes on with a closed gate (Layouts.hiding?). Only the pages, menus, the picker and the
+  # layouts ask: translations already stored apply whatever the switch says.
   def self.feature?(key) = defined?(::GkRecords::Features) ? ::GkRecords::Features.on?(key) : false
 
   # gk_access is there, with its levels: the layouts need it (required in IDENTITY.yml for the layouts; the code guards
@@ -11,14 +13,16 @@ module GkFields
   # the plugin starts and does everything else; the layouts' menu item, pages and sections are not there.
   def self.access? = defined?(::GkAccess) && ::GkAccess.respond_to?(:levels) ? true : false
 
-  # The layouts are there: the declared function 'fields.layouts' is on and gk_access is installed. Off, saved
-  # layouts stay untouched and an issue is drawn as in core.
-  def self.layouts? = access? && feature?('fields.layouts')
+  # The layouts are drawn: GK GUI Stuff is there (gate.rb), the declared function 'fields.layouts' is on and gk_access
+  # is installed. With the function off, saved layouts stay untouched and an issue is drawn as in core. With only the
+  # gate closed no section is drawn, but what a section's level hides stays hidden (Layouts.hiding?, hidden_keys).
+  def self.layouts? = gui? && access? && feature?('fields.layouts')
 
   # The content languages of every GK plugin, in one place (fields' setting Languages to offer): the language what is
   # set up is written in first, then the others, as language codes (["sv", "en"]). A plugin asks
   # GkFields.content_languages when fields is installed (defined?(::GkFields.content_languages)); without fields it
-  # uses [Setting.default_language, 'en'] (uniq), the same as fields gives when its setting is empty.
+  # uses [Setting.default_language, 'en'] (uniq), the same as fields gives when its setting is empty, and when GK GUI
+  # Stuff is missing (gate.rb: fields then answers as if it were not there).
   def self.content_languages = Translations.content_languages
 
   # The language what is set up is written in (the first of content_languages)
@@ -63,16 +67,29 @@ module GkFields
     def sources = (@sources ||= {})
     def all_types = TYPES.merge(extra_types.transform_values { |v| v[:attrs] })
 
+    # A plugin that loads before GK GUI Stuff registers before the gate is known (gate.rb): the type is kept, and its
+    # readers are put on its model only with the gate open, here or when it opens (install_registered_readers!).
+    # Without GK GUI Stuff nothing is put on the model, and the kept type is read by no page.
     def register_type(type, attrs:, label:, records:, off_controllers: [])
       extra_types[type.to_s] = { attrs: attrs.map(&:to_s), label: label, records: records, off: off_controllers.map(&:to_s) }
-      install_reader(type.to_s, attrs.map(&:to_s))
+      install_reader(type.to_s, attrs.map(&:to_s)) if GkFields.gui?
     rescue StandardError => e
       Rails.logger.warn("[gk_fields] type #{type} not registered: #{e.class} #{e.message}")
     end
 
+    # Kept the same way: read only by the pages, which are closed without GK GUI Stuff
     def register_source(key, label:, entries:, models: [])
       sources[key.to_s] = { label: label, entries: entries, models: models.map(&:to_s) }
-      fallback_targets! if defined?(::GkRecords::Targets)
+      fallback_targets! if GkFields.gui? && defined?(::GkRecords::Targets)
+    end
+
+    # The readers of every type a plugin registered, once the gate is open (Gate.start!); each class only once
+    def install_registered_readers!
+      extra_types.each do |type, v|
+        install_reader(type, v[:attrs])
+      rescue StandardError => e
+        Rails.logger.warn("[gk_fields] type #{type} not registered: #{e.class} #{e.message}")
+      end
     end
 
     # A change is always logged: a source's model that no plugin made a records target gets a plain one
@@ -151,13 +168,16 @@ module GkFields
 
     def settings = (::Setting.plugin_gk_fields || {})
 
-    # The language the core strings are written in: it needs no translation
-    def core_language = settings['core_language'].to_s.strip.presence || ::Setting.default_language.to_s
+    # The language the core strings are written in: it needs no translation. Without GK GUI Stuff (gate.rb) fields
+    # answers as if it were not there: Redmine's default language
+    def core_language
+      (GkFields.gui? && settings['core_language'].to_s.strip.presence) || ::Setting.default_language.to_s
+    end
 
     # The languages what is set up is offered in (the core language first)
     def content_languages
-      # a list from the page's choice of languages, or a line of codes as stored before
-      v = settings['content_languages']
+      # a list from the page's choice of languages, or a line of codes as stored before; none without GK GUI Stuff
+      v = GkFields.gui? ? settings['content_languages'] : nil
       langs = (v.is_a?(Array) ? v.map(&:to_s) : v.to_s.split(/[\s,]+/)).map(&:strip).reject(&:empty?)
       langs = [::Setting.default_language.to_s, 'en'] if langs.empty?
       ([core_language] + langs).uniq
@@ -171,7 +191,10 @@ module GkFields
 
     # api: a REST request with lang= (the readers give an ApiName); pick: the picker's marks asked for (Picker.wanted?).
     # Both are off unless given, so a mail written inside a request has neither.
+    # Without GK GUI Stuff (gate.rb) nothing is switched on: the block runs as it is.
     def with(on, lang: nil, api: false, pick: false)
+      return yield unless GkFields.gui?
+
       prev = [Thread.current[:gk_fields_on], Thread.current[:gk_fields_lang], Thread.current[:gk_fields_api], Picker.state]
       Thread.current[:gk_fields_on] = on
       Thread.current[:gk_fields_lang] = lang.to_s.presence
@@ -180,7 +203,7 @@ module GkFields
       refresh! if on
       yield
     ensure
-      Thread.current[:gk_fields_on], Thread.current[:gk_fields_lang], Thread.current[:gk_fields_api], Picker.state = prev
+      Thread.current[:gk_fields_on], Thread.current[:gk_fields_lang], Thread.current[:gk_fields_api], Picker.state = prev if prev
     end
 
     def api? = Thread.current[:gk_fields_api] == true
@@ -431,7 +454,10 @@ module GkFields
     def missing(row) = languages.select { |l| (row.translations || {})[l].blank? }
 
     # Save one text's translations; returns the row when something changed. merge: only fill what is empty.
+    # Nothing is saved without GK GUI Stuff (gate.rb): nil, as when nothing changed.
     def store(type, id, attr, key, texts, user: User.current, merge: false, origin: nil)
+      return nil unless GkFields.gui?
+
       rec = ::GkFieldsTranslation.find_or_initialize_by(record_type: type, record_id: id, attribute_name: attr.to_s, value_key: key.presence)
       before = rec.translations_hash
       wanted = texts.to_h.transform_keys(&:to_s).transform_values { |v| v.to_s.strip }
@@ -466,6 +492,8 @@ module GkFields
     # language whatever the core language is. Only a text with no row of translations yet gets them: a translation
     # an administrator wrote or changed is never touched. True when a row was written.
     def seed_record!(type, record, attr, texts)
+      return false unless GkFields.gui?
+
       texts = texts.to_h.transform_keys(&:to_s).transform_values { |v| v.to_s.strip }.reject { |_l, v| v.empty? }
       return false if texts.empty? || !record&.id
       return false unless seedable?(type)
@@ -483,7 +511,7 @@ module GkFields
     # when the plugin has registered its type, and again where the plugin makes its starting rows. Returns how many
     # rows got texts.
     def seed!(type, label_key_prefix:, key_column: :key, attr: 'name')
-      return 0 unless seedable?(type)
+      return 0 unless GkFields.gui? && seedable?(type)
 
       type.to_s.constantize.where.not(key_column => [nil, '']).to_a.count do |o|
         seed_record!(type, o, attr, locale_texts("#{label_key_prefix}#{o.read_attribute(key_column)}"))
@@ -508,23 +536,30 @@ module GkFields
       false
     end
 
-    # The stored translations of a type's texts: { record_id => { lang => text } }
+    # The stored translations of a type's texts: { record_id => { lang => text } }; none without GK GUI Stuff (gate.rb)
     def stored(type, attr = 'name')
+      return {} unless GkFields.gui?
+
       ::GkFieldsTranslation.where(record_type: type.to_s, attribute_name: attr.to_s, value_key: nil)
                            .to_a.to_h { |r| [r.record_id, r.translations_hash] }
     end
 
     # Every language of one text, as an API gives it, by the record's id: the stored translation in each language, and
     # the core string for lang (the language it is written in, default the core language) when that language has none
+    # Without GK GUI Stuff (gate.rb) only the core string, as without fields.
     def texts_for(type, id, attr, core, lang: core_language)
+      return { lang.to_s => core.to_s }.reject { |_l, v| v.strip.empty? } unless GkFields.gui?
+
       row = ::GkFieldsTranslation.find_by(record_type: type.to_s, record_id: id, attribute_name: attr.to_s, value_key: nil)
       t = (row ? row.translations_hash : {}).reject { |_l, v| v.to_s.strip.empty? }
       { lang.to_s => core.to_s }.merge(t).reject { |_l, v| v.to_s.strip.empty? }
     end
   end
 
-  # records loads after this plugin and asks for the targets then
+  # records loads after this plugin and asks for the targets then; nothing without GK GUI Stuff (gate.rb)
   def self.register_records!
+    return unless gui?
+
     Translations.fallback_targets!
     ::GkRecords::Targets.register('gk_fields_translation', model: 'GkFieldsTranslation',
                                                            visible: ->(_r, user) { user.admin? }, editable: ->(_r, user) { user.admin? },
@@ -557,7 +592,7 @@ module GkFields
   PASTE_REFUSED_COOLDOWN = 60
 
   def self.paste_refused!(user, lang, errors)
-    return unless user&.logged? && defined?(::GkRecords::Events) && ::GkRecords::Targets.find('gk_fields_page')
+    return unless gui? && user&.logged? && defined?(::GkRecords::Events) && ::GkRecords::Targets.find('gk_fields_page')
     # the cooldown is asked of records itself (Rails' cache is a null store in development and per process elsewhere)
     # the database counts the minute (now()), since Redmine's local time sent without a zone is read as UTC there
     return if ::GkRecordsEvent.where(kind: 'gk_fields_paste_refused', user_id: user.id)
